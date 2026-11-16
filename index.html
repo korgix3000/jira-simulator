@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scrum Project Simulator</title>
+<style>
+/* Layout idea: a Jira-like workspace (top bar, project sidebar, work area) with a lesson rail on the right that walks students through the Scrum cycle. */
+:root{
+  --bg:#ffffff; --surface:#ffffff; --sunken:#f4f5f7; --ink:#172b4d; --muted:#5e6c84; --line:#dfe1e6;
+  --accent:#0052cc; --accent-ink:#ffffff; --accent-soft:#deebff; --gnav:#0747a6;
+  --good:#1d7f55; --good-soft:#dcf2e7; --warn:#a55f00; --warn-soft:#fcefd6; --bad:#c3372b; --bad-soft:#fde3e0;
+  --violet:#6a4bd3; --violet-soft:#ece7fc;
+  --hint:#f2a516; --hint-ink:#2a1a00;
+  --font-d:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-b:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --shadow:0 1px 2px rgba(23,33,49,.08), 0 2px 8px rgba(23,33,49,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#12161d; --surface:#1a2029; --sunken:#222a35; --ink:#e4e9f1; --muted:#9aa6b8; --line:#2e3846;
+    --accent:#6b98ff; --accent-ink:#0d1320; --accent-soft:#1f2c47;
+    --good:#4cc38a; --good-soft:#173328; --warn:#e7a644; --warn-soft:#3a2c14; --bad:#ff7a6d; --bad-soft:#3c1f1c;
+    --violet:#a48dff; --violet-soft:#2a2347; --gnav:#0b2a5c;
+    --hint:#f5b43a; --hint-ink:#2a1a00;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 2px 10px rgba(0,0,0,.25);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#12161d; --surface:#1a2029; --sunken:#222a35; --ink:#e4e9f1; --muted:#9aa6b8; --line:#2e3846;
+  --accent:#6b98ff; --accent-ink:#0d1320; --accent-soft:#1f2c47;
+  --good:#4cc38a; --good-soft:#173328; --warn:#e7a644; --warn-soft:#3a2c14; --bad:#ff7a6d; --bad-soft:#3c1f1c;
+  --violet:#a48dff; --violet-soft:#2a2347;
+  --hint:#f5b43a; --hint-ink:#2a1a00;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 2px 10px rgba(0,0,0,.25);
+  color-scheme:dark;
+  --gnav:#0b2a5c;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-b);font-size:15px;line-height:1.45}
+h1,h2,h3{font-family:var(--font-d);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:24px;font-weight:500} h2{font-size:18px} h3{font-size:15px}
+p{margin:0 0 .6em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+#app{height:100%}
+.shell{display:grid;grid-template-rows:52px 1fr;height:100%}
+.top{display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--font-d);font-weight:700;font-size:16px}
+.brand-mark{width:26px;height:26px;border-radius:6px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink)}
+.crumb{color:var(--muted);font-size:14px}
+.top .spacer{flex:1}
+.body{display:grid;grid-template-columns:52px 216px minmax(0,1fr) 360px;min-height:0}
+.body.nolesson{grid-template-columns:52px 216px minmax(0,1fr)}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:14px 10px;overflow:auto}
+.proj{display:flex;gap:10px;align-items:center;padding:6px 8px 14px}
+.proj-av{width:34px;height:34px;border-radius:7px;background:var(--violet);color:#fff;display:grid;place-items:center;font-family:var(--font-d);font-weight:700}
+.proj small{display:block;color:var(--muted);font-size:12px}
+.navh{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:12px 10px 4px}
+.nav{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left;color:var(--ink)}
+.nav:hover{background:var(--sunken)}
+.nav.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav[disabled]{opacity:.45;cursor:not-allowed}
+.nav svg{flex:none}
+.main{overflow:auto;padding:22px 26px 60px;min-width:0}
+.lesson{background:var(--surface);border-left:1px solid var(--line);overflow:auto;padding:16px 18px 40px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px;white-space:nowrap}
+.btn:hover{background:var(--sunken)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--sunken)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:3px 8px;font-size:13px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+input[type=text],input:not([type]),select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 9px;width:100%}
+textarea{min-height:70px;resize:vertical}
+label.f{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+label.f > span.hint{font-weight:400}
+
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.head p{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;align-items:start}
+.stack{display:grid;gap:14px;align-content:start}
+.row-flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--muted)}
+.empty{border:1.5px dashed var(--line);border-radius:10px;padding:28px;text-align:center;color:var(--muted)}
+.empty h2{color:var(--ink);margin-bottom:6px}
+
+.loz{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:var(--sunken);color:var(--muted);white-space:nowrap}
+.loz.todo{background:var(--sunken);color:var(--muted)}
+.loz.inprogress{background:var(--accent-soft);color:var(--accent)}
+.loz.review{background:var(--violet-soft);color:var(--violet)}
+.loz.done{background:var(--good-soft);color:var(--good)}
+.loz.blocked{background:var(--bad-soft);color:var(--bad)}
+.loz.active{background:var(--accent-soft);color:var(--accent)}
+.loz.closed{background:var(--good-soft);color:var(--good)}
+.loz.future{background:var(--sunken);color:var(--muted)}
+.fixv{font-size:11px;border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--muted);white-space:nowrap}
+.epic-tag{display:inline-block;font-size:12px;font-weight:600;padding:0 7px;border-radius:4px;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+.pts{display:inline-grid;place-items:center;min-width:24px;height:20px;padding:0 6px;border-radius:10px;background:var(--sunken);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.pts.none{color:var(--muted);font-weight:600}
+.av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-size:11px;font-weight:700;flex:none}
+.av.empty-av{background:var(--sunken);color:var(--muted);border:1px dashed var(--line)}
+.ti{width:16px;height:16px;border-radius:3px;display:inline-grid;place-items:center;flex:none}
+.ti svg{width:10px;height:10px}
+.ti-story{background:#36a36b}.ti-task{background:#3b7ae0}.ti-bug{background:#d9473b}.ti-epic{background:#7a55e0}
+.prio{font-size:13px;font-weight:700;width:16px;text-align:center;flex:none}
+.p-Highest,.p-High{color:var(--bad)} .p-Medium{color:var(--warn)} .p-Low,.p-Lowest{color:var(--accent)}
+
+/* backlog */
+.bl{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
+.epics{position:sticky;top:0}
+.epic-scroll{max-height:62vh;overflow:auto;margin-bottom:8px;padding:2px}
+.epic-item{display:grid;gap:4px;padding:7px 10px;border-radius:7px;border:1px solid var(--line);background:var(--surface);cursor:pointer;margin-bottom:8px;text-align:left;width:100%}
+.epic-item.on{outline:2px solid var(--accent)}
+.bar{height:6px;border-radius:3px;background:var(--sunken);overflow:hidden}
+.bar > i{display:block;height:100%;background:var(--good)}
+.section{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:16px}
+.section.dropping{outline:2px dashed var(--accent);outline-offset:-2px}
+.sec-h{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.sec-h h3{font-size:15px}
+.sec-goal{padding:8px 14px;border-bottom:1px solid var(--line);font-size:14px;background:var(--sunken)}
+.sec-goal b{color:var(--muted);font-weight:600}
+.cap{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);min-width:220px}
+.cap .bar{flex:1;height:8px}
+.cap .bar > i.over{background:var(--bad)} .cap .bar > i.near{background:var(--warn)}
+.irow{display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid var(--line);cursor:pointer;min-height:40px;background:var(--surface)}
+.irow:last-child{border-bottom:0}
+.irow:hover{background:var(--sunken)}
+.irow.drag-over{box-shadow:inset 0 2px 0 var(--accent)}
+.irow .key{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.irow .sum{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.irow.done .sum{text-decoration:line-through;color:var(--muted)}
+.grip{color:var(--muted);cursor:grab;font-size:14px;letter-spacing:-2px}
+.fibrow{display:flex;gap:4px}
+.fib{border:1px solid var(--line);background:var(--surface);border-radius:5px;min-width:26px;height:24px;font-size:12px;font-weight:700;cursor:pointer;padding:0 5px}
+.fib:hover{border-color:var(--accent)}
+.fib.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.create-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+.create-row select{width:auto}
+.dropzone-empty{padding:16px 14px;color:var(--muted);font-size:14px;text-align:center}
+
+/* board */
+.board{display:grid;grid-template-columns:repeat(9,minmax(190px,1fr));gap:10px;align-items:start;overflow-x:auto;padding-bottom:8px;margin-bottom:14px}
+.col.c-blocked{background:var(--bad-soft)}
+.col-def{font-size:11.5px;color:var(--muted);padding:0 4px 10px;line-height:1.3}
+.qf{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.qf button{border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:3px 11px;font-size:13px;cursor:pointer}
+.qf button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.col{background:var(--sunken);border-radius:10px;padding:10px;min-height:360px}
+.col.dropping{outline:2px dashed var(--accent);outline-offset:-2px}
+.col-h{display:flex;justify-content:space-between;gap:6px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:2px 4px 10px}
+.bcard{background:var(--surface);border-radius:8px;padding:10px 11px;box-shadow:var(--shadow);margin-bottom:8px;cursor:grab;display:grid;gap:8px;border-left:3px solid transparent}
+.bcard.blocked{border-left-color:var(--bad)}
+.bcard .t{font-size:14px}
+.bcard .meta{display:flex;align-items:center;gap:7px}
+.bcard .meta .key{font-size:12px;color:var(--muted);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.flag{font-size:12px;color:var(--bad);font-weight:600;background:var(--bad-soft);padding:3px 7px;border-radius:5px}
+.prog{height:4px;border-radius:2px;background:var(--sunken);overflow:hidden}
+.prog > i{display:block;height:100%;background:var(--accent)}
+.sprint-bar{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:14px;align-items:start}
+.daypill{font-family:var(--font-d);font-weight:700;font-size:13px;background:var(--accent-soft);color:var(--accent);padding:3px 9px;border-radius:12px}
+.banner{padding:10px 14px;border-radius:8px;margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner.info{background:var(--accent-soft);color:var(--accent)}
+.banner .btn{margin-left:auto}
+.standup{margin-top:16px}
+.su-line{display:grid;grid-template-columns:120px 1fr 1fr 1fr;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.su-line.h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-top:0}
+
+/* charts */
+.chart text{fill:var(--muted);font-size:11px;font-family:var(--font-b)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .ideal{stroke:var(--muted);stroke-dasharray:4 4;fill:none;stroke-width:1.5}
+.chart .actual{stroke:var(--accent);fill:none;stroke-width:2.5}
+.chart .area{fill:var(--accent);opacity:.1}
+.chart .dot{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+.chart .scope{stroke:var(--warn);stroke-width:2}
+.chart .b-commit{fill:var(--line)} .chart .b-done{fill:var(--good)}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:12px;height:3px;vertical-align:middle;margin-right:5px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:var(--sunken);border-radius:8px;padding:10px 12px}
+.stat b{display:block;font-family:var(--font-d);font-size:22px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+
+/* retro */
+.retro{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px;overflow-x:auto}
+.rcol{border-radius:10px;padding:12px;min-height:300px;background:var(--sunken)}
+.rcol h3{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.rcol .sub{font-size:13px;color:var(--muted);margin-bottom:10px}
+.rcol.well h3 i{background:var(--good)} .rcol.improve h3 i{background:var(--warn)} .rcol.action h3 i{background:var(--accent)}
+.rcol h3 i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.note{background:var(--surface);border-radius:8px;padding:9px 10px;box-shadow:var(--shadow);margin-bottom:8px;display:grid;gap:6px;font-size:14px}
+.note .acts{display:flex;gap:6px;align-items:center}
+.vote{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:0 8px;font-size:12px;font-weight:700;cursor:pointer}
+
+/* lesson */
+.steps{display:grid;gap:2px;margin:10px 0 16px}
+.step{display:flex;align-items:center;gap:8px;border:0;background:none;text-align:left;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--muted)}
+.step:hover{background:var(--sunken)}
+.step.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.step .dot{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;flex:none;font-size:10px}
+.step.ok .dot{background:var(--good);border-color:var(--good);color:#fff}
+.lesson h2{font-size:19px;margin:4px 0 10px}
+.lesson .eyebrow{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.lbody{font-size:14.5px;max-width:65ch}
+.tasks{margin:14px 0;display:grid;gap:6px}
+.task{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.task .box{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--line);flex:none;display:grid;place-items:center;margin-top:1px}
+.task.ok .box{background:var(--good);border-color:var(--good);color:#fff}
+.task.ok span{color:var(--muted);text-decoration:line-through}
+.tip{background:var(--sunken);border-left:3px solid var(--violet);padding:9px 12px;border-radius:0 6px 6px 0;font-size:13.5px}
+.tip b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--violet);margin-bottom:2px}
+.lnav{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+
+/* modal + dialog */
+.overlay{position:fixed;inset:0;background:rgba(10,15,25,.45);display:grid;place-items:start center;padding:40px 16px;overflow:auto;z-index:20}
+.modal{background:var(--surface);border-radius:12px;width:min(920px,100%);box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.m-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.m-b{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:22px;padding:18px}
+.m-b .sumin{font-family:var(--font-d);font-size:19px;font-weight:700;border-color:transparent;padding:4px 6px;margin-left:-7px}
+.m-b .sumin:hover,.m-b .sumin:focus{border-color:var(--line)}
+.fields{display:grid;gap:12px;align-content:start}
+.list-item{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.list-item span{flex:1}
+.blockbox{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:10px 12px;font-size:14px;display:grid;gap:8px}
+.poker{background:var(--sunken);border-radius:8px;padding:12px;display:grid;gap:10px}
+.pcards{display:flex;gap:8px;flex-wrap:wrap}
+.pcard{width:52px;height:70px;border-radius:7px;display:grid;place-items:center;font-family:var(--font-d);font-weight:700;font-size:20px;background:var(--surface);border:1.5px solid var(--line)}
+.pcard.down{background:repeating-linear-gradient(45deg,var(--accent),var(--accent) 6px,var(--accent-soft) 6px,var(--accent-soft) 12px);border-color:var(--accent)}
+.pwho{font-size:11px;text-align:center;color:var(--muted);margin-top:3px;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dialog{background:var(--surface);border-radius:12px;width:min(520px,100%);box-shadow:0 10px 40px rgba(0,0,0,.25);padding:20px;display:grid;gap:12px;margin-top:40px}
+.dialog .acts{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.dialog ul{margin:0;padding-left:18px}
+.note-warn{background:var(--warn-soft);color:var(--warn);padding:8px 10px;border-radius:6px;font-size:14px}
+.note-bad{background:var(--bad-soft);color:var(--bad);padding:8px 10px;border-radius:6px;font-size:14px}
+#tour{position:fixed;inset:0;pointer-events:none;z-index:35}
+.tdot{position:fixed;min-width:24px;height:24px;padding:0 6px;border-radius:12px;background:var(--hint);color:var(--hint-ink);font:700 12px/24px var(--font-b);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.tdot.first::after{content:"";position:absolute;inset:-6px;border-radius:18px;border:2px solid var(--hint);animation:pulse 1.4s ease-out infinite}
+@keyframes pulse{from{opacity:.9;transform:scale(.8)}to{opacity:0;transform:scale(1.5)}}
+.tcall{position:fixed;background:var(--hint);color:var(--hint-ink);border-radius:8px;padding:8px 11px;font-size:13.5px;line-height:1.35;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.tcall b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+.tour-hl{outline:2px solid var(--hint) !important;outline-offset:2px}
+.tnum{font-size:10px;font-weight:700;color:var(--hint-ink)}
+.task:not(.ok) .box{background:var(--hint);border-color:var(--hint)}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;z-index:40;max-width:min(560px,90vw)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* board settings */
+.bs{display:grid;grid-template-columns:190px minmax(0,1fr);gap:18px;align-items:start}
+.bs-nav{display:grid;gap:2px}
+.bs-nav button,.bs-nav span{display:block;text-align:left;border:0;background:none;padding:6px 10px;border-radius:5px;font-size:14px;color:var(--accent);cursor:pointer}
+.bs-nav span{color:var(--muted);cursor:default;opacity:.7}
+.bs-nav button.on{background:var(--accent-soft);font-weight:700;color:var(--ink)}
+.cm{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+.cm-col{min-width:150px;background:var(--sunken);border-radius:6px;padding:10px;display:grid;gap:8px;align-content:start}
+.cm-col.unm{background:transparent;border:1.5px dashed var(--line)}
+.cm-h{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:13px;text-transform:uppercase;letter-spacing:.03em}
+.cm-st{display:flex;gap:4px;flex-wrap:wrap;min-height:22px}
+.cm-mv{display:flex;justify-content:space-between}
+.note-ok{background:var(--good-soft);color:var(--good);padding:8px 10px;border-radius:6px;font-size:14px}
+.simbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--sunken);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:14px}
+.qf .clear{border:0;background:none;color:var(--accent)}
+.bc{font-size:14px;color:var(--muted);margin-bottom:6px}
+.sec-foot{display:flex;justify-content:flex-end;gap:12px;padding:8px 14px;font-size:13px;color:var(--muted);border-top:1px solid var(--line)}
+.gstrip{background:var(--gnav);display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0}
+.gstrip button{width:36px;height:36px;border-radius:50%;border:0;background:transparent;color:#fff;cursor:pointer;display:grid;place-items:center}
+.gstrip button:hover{background:rgba(255,255,255,.18)}
+.gstrip .sp{flex:1}
+.gstrip .me{background:rgba(255,255,255,.2);font-size:12px;font-weight:700}
+.side .board-item{display:flex;gap:10px;align-items:center;padding:8px 10px;margin:0 0 6px;border-radius:6px;background:var(--sunken);font-size:14px}
+.side .board-item small{display:block;color:var(--muted);font-size:12px}
+.side hr{border:0;border-top:1px solid var(--line);margin:10px 4px}
+.nav.dis{opacity:.45;cursor:default}
+@media (max-width:860px){.bs{grid-template-columns:1fr}.gstrip{display:none}}
+/* onboarding */
+.onb-steps{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px;font-size:14px;color:var(--muted)}
+.onb-steps span{display:flex;align-items:center;gap:7px}
+.onb-steps i{font-style:normal;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;font-size:12px;font-weight:700}
+.onb-steps .on{color:var(--accent);font-weight:700} .onb-steps .on i{border-color:var(--accent)}
+.onb-steps .ok i{background:var(--good);border-color:var(--good);color:#fff}
+.onb{max-width:760px}
+.onb-acc{display:grid;grid-template-columns:240px 1fr;gap:26px}
+.onb-side ul{padding-left:18px;margin:10px 0;display:grid;gap:4px}
+.onb-q{background:var(--violet);color:#fff;border-radius:10px;padding:16px;display:grid;gap:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:0;background:rgba(255,255,255,.16);color:#fff;border-radius:5px;padding:6px 11px;cursor:pointer;font-size:14px}
+.chip:hover,.chip.on{background:rgba(255,255,255,.34)}
+.link{border:0;background:none;color:inherit;opacity:.8;cursor:pointer;justify-self:end;text-decoration:underline;font-size:13px}
+.site-in{display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;background:var(--surface);padding-right:10px}
+.site-in input{border:0;background:transparent}
+.site-in span{color:var(--muted);font-weight:400}
+.qs p{margin:0 0 10px;font-size:16px}
+.qs select.unset{border-color:var(--hint)}
+@media (max-width:700px){.onb-acc{grid-template-columns:1fr}}
+/* setup */
+.tpl{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.tplc{border:1.5px solid var(--line);border-radius:10px;padding:14px;cursor:pointer;background:var(--surface);text-align:left;display:grid;gap:6px}
+.tplc.on{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.tplc small{color:var(--muted)}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.flow .arrow{color:var(--muted)}
+.hier{display:grid;gap:6px;font-size:14px}
+.hier div{display:flex;align-items:center;gap:8px}
+.radio{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.radio input{margin-top:4px}
+.role-card{border-top:3px solid var(--accent)}
+.role-card.po{border-top-color:var(--violet)} .role-card.sm{border-top-color:var(--warn)} .role-card.dev{border-top-color:var(--good)}
+
+@media (max-width: 1180px){ .body{grid-template-columns:52px 200px minmax(0,1fr) 300px} .body.nolesson{grid-template-columns:52px 200px minmax(0,1fr)} .bl{grid-template-columns:1fr} .epics{position:static} }
+@media (max-width: 860px){
+  .body,.body.nolesson{grid-template-columns:1fr;grid-template-rows:auto auto auto;overflow:auto}
+  .shell{grid-template-rows:auto 1fr}
+  .top{flex-wrap:wrap;padding:8px 16px}
+  .side{display:flex;overflow-x:auto;padding:6px;border-right:0;border-bottom:1px solid var(--line)}
+  .side .proj,.side .navh{display:none}
+  .nav{width:auto;white-space:nowrap}
+  .main{overflow:visible;padding:16px}
+  .lesson{border-left:0;border-top:1px solid var(--line);overflow:visible}
+  .m-b{grid-template-columns:1fr}
+  .sprint-bar{grid-template-columns:1fr}
+  .su-line{grid-template-columns:1fr}
+  .su-line.h{display:none}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none !important} .tdot.first::after{animation:none} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="tour" aria-hidden="true"></div>
+<script>
+'use strict';
+const KEY='scrumsim-vas-v5';
+const FIB=[1,2,3,5,8,13,20,40,100];
+const ST=[['backlog','Backlog'],['sprintbacklog','Current Sprint Backlog'],['blocked','Blocked'],['design','Design'],['development','Development'],['unittesting','Unit Testing'],['qa','QA'],['uat','UAT'],['done','Done']];
+const ST_DEF={backlog:'Stories, tasks, sub-tasks or bugs that need the Product Team to work on them before they can be treated as ready.',sprintbacklog:'Ready to be worked on in this sprint.',blocked:'Currently blocked by an impediment.',design:'A design component is being worked on (Creative, UX/IA).',development:'Under development and/or configuration.',unittesting:'Being tested by the development team.',qa:'Under QA testing.',uat:'Being tested by business users.',done:'Successfully deployed to production and ready to use. Bugs are not "done"; they are closed.'};
+const ST_GROUP={backlog:'todo',sprintbacklog:'todo',blocked:'blocked',design:'inprogress',development:'inprogress',unittesting:'inprogress',qa:'review',uat:'review',done:'done'};
+const WORKING=['design','development','unittesting'];
+const ROLES=['Product Owner','Scrum Master','Developer','Stakeholder'];
+const PRIOS=['Highest','High','Medium','Low','Lowest'];
+const PRIO_ICON={Highest:'⇈',High:'↑',Medium:'=',Low:'↓',Lowest:'⇊'};
+const EPIC_COLORS=['#7a55e0','#d06a12','#0f8a8c','#c23f78','#4f7d1d','#2456d3'];
+const AV_COLORS=['#2456d3','#7a55e0','#0f8a8c','#c23f78','#d06a12','#4f7d1d','#8a5a2b','#3b6e8f'];
+const TYPE_LABEL={story:'Story',task:'Task',bug:'Bug',epic:'Epic'};
+const GLYPH={
+  story:'<svg viewBox="0 0 10 10"><path d="M2.5 1h5v8L5 7 2.5 9z" fill="#fff"/></svg>',
+  task:'<svg viewBox="0 0 10 10"><path d="M2 5.2l2 2 4-4.4" stroke="#fff" stroke-width="1.8" fill="none"/></svg>',
+  bug:'<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="3" fill="#fff"/></svg>',
+  epic:'<svg viewBox="0 0 10 10"><path d="M6 1L2 6h3l-1 3 4-5H5z" fill="#fff"/></svg>'
+};
+const BLOCKERS=['Waiting for Bose to send the speaker and amp specs','Creative copy not approved yet','Demo tablet at the show stand is broken','Needs access to the Neo vehicle data feed'];
+const REQUESTS=[
+  ['Get In app crashes when opening the Audio System screen','Visitors at the stand report the app closes when they tap Audio System. The show opens to the public on Friday.'],
+  ['Vehicle prices show without VAT on the Dashboard screen','The sales team says prices on the Dashboard screen are missing VAT, which confuses visitors.'],
+  ['Screen saver does not start on the kiosk tablets','Kiosk tablets at the stand stay on the last screen instead of showing the screen saver.']
+];
+const SAMPLE_RELEASES=[{name:'Release 1',start:'2019-07-01',end:'2019-10-04',desc:'Get In bare bones'},{name:'Release 2 - MVP',start:'2019-10-07',end:'2020-04-10',desc:'Full release of all features'}];
+const EPIC_SUMMARY={'Audio System':'As a user, I would like to be able to see and pick the type of audio system available for Neo vehicle','Look & Feel':'As a user, I would like to have proper placements of information on each screen'};
+const NINE=ST.map(x=>x[1]);
+const SAMPLE_EPICS=['Audio System','Navigation','Look & Feel','Sunroof','Dashboard','PCM System','Video System','Seats','Climate System','Drive Feature','Transmission','Park Monitoring','Content','Screen Saver','Test Drive','Share Content','Subscribe'];
+const DOD_AUDIO='The story is complete when the user is presented with the types of speakers and amp offered for the Neo Core Audio System with all creative, copy and feature specs.';
+/* [epic, type, summary, size, priority, acceptance criteria, definition of done, release] */
+const SAMPLE_ITEMS=[
+  ['Look & Feel','story','Neo Core Audio System Look & Feel Spike',5,'High',['Given a user has navigated to the Bose Audio System screen on the Get In application, when he clicks on "Neo Core Audio System", then the user is presented with a proper layout featuring all of the correct creative, copy and feature specs'],'The story is complete when the user is presented with the correct placement of copy, creative and feature specs.','Release 1','As a Neo vehicle enthusiast, I would like to understand where the Neo Core Audio System offering placements are (creative, copy, feature specs), so I can have a better understanding of the overall layout in order to correctly place all of the components for the user on screen','Brent Smith','Look & Feel, Neo Core Audio System'],
+  ['Audio System','story','Neo Core Audio System',20,'High',['Given a user has navigated to the Bose Audio System screen on the Get In application, when he clicks on "Neo Core Audio System", then the user is taken to the "Neo Core Audio System" screen where he can find more about the types of speakers and amp offered'],DOD_AUDIO,'Release 1','As a Neo vehicle enthusiast, I would like to understand what Neo Core Audio System offerings are available for the vehicle, so I can be better informed what type of speakers and amp are available','Momenti Go','Audio System'],
+  ['Navigation','story','As a Neo vehicle enthusiast, I would like to be able to navigate to a previous page, so that I can review what I have seen and read',3,'High',[],'','Release 1','','',''],
+  ['Navigation','story','As a Neo vehicle enthusiast, I would like to be able to navigate through the entire application',8,'Highest',[],'','Release 1','','',''],
+  ['Screen Saver','story','As a show visitor, I would like to see a Neo screen saver when the kiosk is idle, so that the stand always looks attractive',5,'High',[],'','Release 1','','',''],
+  ['Audio System','task','Research spike for audio systems',2,'Medium',[],'','Release 1','','Sandra Price','Audio System'],
+  ['Audio System','story','As a Neo vehicle enthusiast, I would like to understand what Bose offerings are available for the vehicle, so I can be better informed what type of speakers and amp are available',8,'Medium',[],'','Release 1','','','Audio System'],
+  ['Audio System','story','As a Neo vehicle enthusiast, I would like to understand what Neo Premium Audio System offerings are available for the vehicle, so I can be better informed what type of speakers and amp are available',8,'Medium',[],'','Release 1','','','Audio System'],
+  ['Subscribe','story','As a Neo vehicle enthusiast, I would like to subscribe to receiving more information about Neo vehicle',3,'Medium',[],'','Release 1','','',''],
+  ['Audio System','story','As a user of Get In app, I want to be able to pick a good quality system, so we can enjoy this service together',5,'Low',[],'','Release 2 - MVP','','',''],
+  ['Seats','story','As a user, I would like to be able to see and pick the type of seat available for Neo vehicle',5,'Medium',[],'','Release 2 - MVP','','',''],
+  ['Seats','story','As a Neo vehicle enthusiast, I would like to pick a seat based on type, material and color',8,'Medium',[],'','Release 2 - MVP','','',''],
+  ['Seats','story','As a user, I would like to be able to see and pick the type of colour seat available for Neo vehicle',3,'Low',[],'','Release 2 - MVP','','','']
+];
+const SAMPLE_TEAM=[['Nick Stekovic','Scrum Master','Scrum Master'],['Sandra Price','Developer','Business Analyst'],['Brent Smith','Developer','UX / IA'],['Momenti Go','Developer','Front-end Developer'],['Product Owner (rename me)','Product Owner','Product Owner']];
+const SAMPLE_QF=[['Sandra Price','assignee = "Sandra Price"','All tasks for Sandra Price'],['Brent Smith','assignee = "Brent Smith"','All tasks for Brent Smith'],['Momenti','assignee = "Momenti Go"','All tasks for Momenti Go']];
+
+/* ---------- state ---------- */
+function fresh(){return {v:5,onb:0,site:null,qfs:[{id:'qf-me',name:'Only My Issues',jql:'assignee = currentUser()',desc:'Displays issues which are currently assigned to the current user',builtin:'me'},{id:'qf-recent',name:'Recently Updated',jql:'updatedDate >= -1d',desc:'Displays issues which have been updated in the last day',builtin:'recent'}],columns:[{name:'To Do',statuses:['backlog','sprintbacklog','blocked'],dflt:1},{name:'In Progress',statuses:['design','development','unittesting','qa','uat'],dflt:1},{name:'Done',statuses:['done'],dflt:1}],estimation:'Story Points',workdays:[1,2,3,4,5],stage:0,view:'setup',lesson:true,project:null,team:[],epics:[],issues:[],sprints:[],n:0,flags:{},retro:[],releases:[],filterEpic:null,reportSprint:null,retroSprint:null}}
+function load(){try{const raw=localStorage.getItem(KEY);if(raw){const s=JSON.parse(raw);if(s&&s.v===5)return s}}catch(e){}return fresh()}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+let S=load();
+let UI={modal:null,poker:null,dlg:null,estimate:false,drag:null,tpl:'scrum',mgmt:'company',qf:null};
+
+const uid=()=>Math.random().toString(36).slice(2,10);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const byId=id=>S.issues.find(i=>i.id===id);
+const member=id=>S.team.find(m=>m.id===id);
+const epicOf=id=>S.epics.find(e=>e.id===id);
+const sprintOf=id=>S.sprints.find(s=>s.id===id);
+const activeSprint=()=>S.sprints.find(s=>s.state==='active');
+const closedSprints=()=>S.sprints.filter(s=>s.state==='closed');
+const byRank=(a,b)=>a.rank-b.rank;
+const sprintIssues=sid=>S.issues.filter(i=>i.sprint===sid).sort(byRank);
+const backlogIssues=()=>S.issues.filter(i=>!i.sprint).sort(byRank);
+const pts=i=>i.points||0;
+const sum=list=>list.reduce((a,i)=>a+pts(i),0);
+const devs=()=>S.team.filter(m=>m.role==='Developer');
+const stories=()=>S.issues.filter(i=>i.type==='story');
+const val=id=>{const el=document.getElementById(id);return el?el.value:''};
+const initials=n=>n.split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+function avColor(name){let h=0;for(const c of name)h=(h*31+c.charCodeAt(0))>>>0;return AV_COLORS[h%AV_COLORS.length]}
+function av(m,size){if(!m)return `<span class="av empty-av" title="Unassigned" ${size?`style="width:${size}px;height:${size}px"`:''}>?</span>`;return `<span class="av" title="${esc(m.name)}" style="background:${avColor(m.name)};${size?`width:${size}px;height:${size}px;`:''}">${esc(initials(m.name))}</span>`}
+const ti=t=>`<span class="ti ti-${t}" title="${TYPE_LABEL[t]}">${GLYPH[t]}</span>`;
+const prio=p=>`<span class="prio p-${p}" title="${p} priority">${PRIO_ICON[p]}</span>`;
+const ptsChip=i=>i.type==='task'?`<span class="pts none" title="Tasks don't get story points">task</span>`:i.points?`<span class="pts" title="Story points">${i.points}</span>`:`<span class="pts none" title="Not estimated">–</span>`;
+function epicTag(id){const e=epicOf(id);if(!e)return'';return `<span class="epic-tag" style="background:${e.color}22;color:${e.color}">${esc(e.name)}</span>`}
+const fmtD=d=>{if(!d)return'';const x=new Date(d+'T00:00');return isNaN(x)?d:x.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})};
+const statusLabel=s=>(ST.find(x=>x[0]===s)||[,''])[1];
+const stCls=s=>ST_GROUP[s]||'todo';
+function setStatus(i,s){if(s===i.status)return;{const a=S.sprints.find(x=>x.state==='active');i.updDay=a?a.day:0}if(s==='blocked'){i.prevStatus=i.status==='blocked'?i.prevStatus:i.status;if(!i.blocked)i.blocked='Blocked by an impediment'}else{if(i.status==='blocked'||i.blocked){i.blocked=null}}i.status=s;const need=i.points||i.size||3;if(s==='done'||s==='qa'||s==='uat')i.progress=Math.max(i.progress||0,need);if(s==='backlog'||s==='sprintbacklog')i.progress=0;if(s==='design')i.progress=Math.max(0,Math.min(i.progress||0,need*.19));if(s==='development')i.progress=Math.max(need*.2,Math.min(i.progress||0,need*.69));if(s==='unittesting')i.progress=Math.max(need*.7,Math.min(i.progress||0,need*.99))}
+function forecast(){const c=closedSprints();if(c.length){const last=c.slice(-3);const v=Math.round(last.reduce((a,s)=>a+s.completed,0)/last.length);return {val:v,why:`average velocity of your last ${last.length} sprint${last.length>1?'s':''}`}}const d=devs().length||3;return {val:d*10,why:`${d} developers × about 10 points each (no velocity history yet)`}}
+function nextKey(){S.n++;return S.project.key+'-'+S.n}
+function maxRank(){return S.issues.reduce((a,i)=>Math.max(a,i.rank),0)}
+function minRank(){return S.issues.reduce((a,i)=>Math.min(a,i.rank),0)}
+function newIssue(o){const i=Object.assign({id:uid(),key:nextKey(),type:'story',summary:'',desc:'',ac:[],epic:null,points:null,prio:'Medium',assignee:null,sprint:null,rank:maxRank()+1,subtasks:[],size:null,progress:0,blocked:null,mid:false,dod:'',fix:null,status:'backlog'},o);S.issues.push(i);return i}
+function ensureReleases(){SAMPLE_RELEASES.forEach(r=>{if(!S.releases.some(x=>x.name.toLowerCase()===r.name.toLowerCase()))S.releases.push(Object.assign({},r))})}
+function nineColumns(){S.columns=ST.map(([k,l])=>({name:l,statuses:[k]}))}
+const columnsDone=()=>S.columns.length===9&&S.columns.every((c,k)=>c.name.toLowerCase()===NINE[k].toLowerCase());
+const unmapped=()=>ST.map(x=>x[0]).filter(k=>!S.columns.some(c=>c.statuses.includes(k)));
+const addDays=(iso,n)=>{const [y,m,d]=iso.split('-').map(Number);const t=new Date(Date.UTC(y,m-1,d+n));return t.toISOString().slice(0,10)};
+function remaining(sp){return sum(sprintIssues(sp.id).filter(i=>i.status!=='done'))}
+
+let toastT;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),4200)}
+function commit(){save();render()}
+
+/* ---------- lesson stages ---------- */
+const STORY_RX=/as an? .+(i want|i would like|i'd like).+(so that|so i can|so we can)/i;
+const STAGES=[
+  {t:'Welcome',v:'setup',body:`<p>You'll run the <b>Vangelis Auto Show</b> project from the Jira tutorial videos: the <b>Get In</b> app for the Neo vehicle stand, as planned in the Agile simulator training. You go from an empty Jira site to a running sprint and beyond, using Scrum.</p><p>Scrum works in short, fixed cycles called <b>sprints</b>; this project uses two-week sprints. In each sprint the team plans, builds, shows what it built, and reflects on how it worked.</p><p>The amber bubbles show where to click for each task. Your project is saved in this browser only; press <b>Reset</b> at the top to start over.</p>`,tip:'This is a practice copy. Real Jira has many more settings, but the steps you learn here are the same.',checks:()=>[]},
+  {t:'Sign up for Jira',v:'setup',body:`<p>Sign up for a free Jira Software Cloud trial (7 days). You choose a <b>site name</b>, which becomes your team's web address: <b>vangelisautoshow.atlassian.net</b>. Whoever signs up is the site admin.</p><p>Jira then asks what type of team you work in (<b>Software Development</b>) and what you do (choose <b>Other</b> and type <b>Scrum Master</b>). On <b>Invite your team</b> you can skip: in most organisations the users already exist (for example in Active Directory) and are added later. Finally, answer the setup questions and pick <b>Scrum</b>.</p>`,tip:'In Jira: sign up for the free trial at atlassian.com, confirm the email link, choose a site name, answer the welcome questions, skip or send invites, then answer "Help us set up your Jira".',video:'JiraTutorial1, from the start to about 4 min: the account and site name, the welcome questions, inviting the team and the setup questions.',fill:'site'},
+  {t:'Create the project',v:'setup',body:`<p>Name the project <b>Vangelis Auto Show</b> with the key <b>VAS</b>; every issue is numbered VAS-1, VAS-2… Choose the <b>Scrum</b> template: it gives you a backlog, sprints, epics, releases and reports such as the burndown and velocity charts.</p><p>Then open <b>Board settings → Columns</b>. Delete the default To Do, In Progress and Done columns and add the 9 columns from the team's working agreement, in order, so everyone can see exactly where each feature is. Check that <b>Estimation</b> is Story Points and <b>Working days</b> are Monday to Friday.</p>`,tip:'In Jira: board ⋯ → Board settings → Columns. Delete the default columns, add Backlog, Current Sprint Backlog, Blocked, Design, Development, Unit Testing, QA, UAT, Done, and remove unmapped statuses. Estimation and Working days are in the same settings.',video:'JiraTutorial1, about 4 to 9 min: creating the Scrum project and setting up the 9 board columns.',checks:()=>[['Create a project with the Scrum template',!!S.project]],fill:'project'},
+  {t:'Set up the Scrum team',v:'team',body:`<p>People must be <b>invited</b> to the Jira site before you can assign them work. In the videos: <b>Sandra Price</b> (Business Analyst), <b>Brent Smith</b> (UX/IA), <b>Momenti Go</b> (Front-end Developer) and Nick as <b>Scrum Master</b>. In Scrum terms, Sandra, Brent and Momenti are all <b>Developers</b>; the <b>Product Owner</b> owns and orders the backlog.</p><p>Then make a <b>quick filter</b> for each person, written in JQL: <code>assignee = "Sandra Price"</code>. On the board, clicking a name shows only that person's work, which is how you run the daily stand-up. If the person hasn't been invited yet, Jira says the user doesn't exist.</p>`,tip:'In Jira: Settings (gear) → User management → Invite users. Quick filters: board ⋯ → Board settings → Quick Filters → Name, JQL, Description → Add.',video:'JiraTutorial1, around 9 to 13 min (inviting users, quick filters) and JiraTutorial2, around 21 to 24 min.',checks:()=>{const r=x=>S.team.filter(m=>m.role===x).length;return [['Add a Product Owner',r('Product Owner')>=1],['Add a Scrum Master',r('Scrum Master')>=1],['Add at least 2 Developers',r('Developer')>=2]]},fill:'team'},
+  {t:'Build the product backlog',v:'backlog',body:`<p>The epics come from the <b>story-mapping</b> workshops in the Agile simulator: Audio System, Navigation, Look &amp; Feel, Screen Saver and the rest. Epics should be created by the <b>Product Owner</b>. Each epic is then broken into <b>stories</b> (and tasks).</p><p>Follow the format from the working agreement: <i>As a [role], I would like [goal] so that [why]</i>. Every story needs <b>acceptance criteria</b> (Given… When… Then…) and a <b>Definition of Done</b>. Link it to its epic and add <b>labels</b> so you can group and filter later.</p>`,tip:'In Jira: Backlog → Create → Issue type Epic (Epic Name + Summary) or Story. Set Epic Link and Labels on the story. A spike is a story for research, such as the Look & Feel spike for UX.',video:'JiraTutorial1, around 15 to 25 min: the story map, then the Audio System epic and the Neo Core Audio System story with acceptance criteria and Definition of Done.',checks:()=>{const st=stories();return [['Create at least 2 epics',S.epics.length>=2],['Create at least 6 stories',st.length>=6],['Write a story as "As a… I want… so that…"',st.some(i=>STORY_RX.test(i.summary+' '+i.desc+' '))],['Give a story 2 or more acceptance criteria',st.some(i=>i.ac.length>=2)],['Link every story to an epic',st.length>0&&st.every(i=>i.epic)]]},fill:'backlog'},
+  {t:'Refine and estimate',v:'backlog',body:`<p>Before sprint planning, the <b>Product Owner prioritises</b> the backlog by dragging items into order. In the video: the Look &amp; Feel spike first, then the Neo Core Audio System development.</p><p>At sprint planning the team estimates each story together in <b>story points</b> using the Fibonacci sequence (1, 2, 3, 5, 8, 13, 21, 40, 100; Jira teams often use 20 instead of 21). In the video the Look &amp; Feel spike is 5 points and Neo Core Audio System is 20. <b>Tasks don't get story points.</b> Planning poker here is a practice round of that group estimate.</p>`,tip:'In Jira: drag issues in the backlog to rank them, then type the estimate into each issue\'s Story Points field.',video:'JiraTutorial2, around 13 to 16 min: estimating with story points and planning poker.',checks:()=>[['Estimate at least 6 issues',S.issues.filter(i=>i.points).length>=6],['Run planning poker on a story (open a story)',!!S.flags.poker],['Reorder the backlog by dragging an issue',!!S.flags.reorder]],fill:'estimate'},
+  {t:'Plan the sprint',v:'backlog',body:`<p>The release plan has <b>20 two-week sprints</b> and two <b>releases</b>: Release 1 (1 Jul – 4 Oct, the bare-bones Get In app) and Release 2 – MVP (7 Oct – 10 Apr, every feature). Create both in <b>Releases → Create version</b>, then set each issue's <b>Fix version</b>.</p><p>Create <b>VAS Sprint 1</b>, drag the top backlog items into it within the forecast, and <b>assign</b> each one: UX work to Brent, front-end development to Momenti. Start it with a two-week duration from 1 July and a goal: <i>Navigation Completion; Screen Saver Look &amp; Feel</i>.</p>`,tip:'In Jira: Releases → Create version (name, start date, release date, description). Backlog → Create sprint, drag issues in, then Start sprint: name, duration, start date, sprint goal.',video:'JiraTutorial2, from the start to about 4 min (release plan, Release 1 and Release 2 - MVP) and around 16 to 19 min (creating and starting VAS Sprint 1).',checks:()=>{const sp=S.sprints.find(s=>s.state!=='closed')||S.sprints[S.sprints.length-1];const items=sp?sprintIssues(sp.id):[];const f=forecast().val;const started=S.sprints.some(s=>s.state!=='future');return [['Create a sprint',S.sprints.length>0],['Put issues in the sprint, all estimated',started||(items.length>0&&items.every(i=>i.points||i.type==='task'))],['Stay within the forecast capacity',started?S.sprints.some(s=>s.state!=='future'&&s.committed<=Math.max(f,s.forecast||0)):(items.length>0&&sum(items)<=f)],['Start the sprint with a sprint goal',started]]},fill:'plan'},
+  {t:'Run the sprint',v:'board',body:`<p>Once the sprint starts, its issues appear on the board in <b>Current Sprint Backlog</b> and move right through Design, Development, Unit Testing, QA and UAT to Done. Anything stuck goes to <b>Blocked</b>.</p><p>At the <b>daily stand-up</b> you go round the room, 3 to 5 minutes per person: what did you do, what's next, any blockers? Click each person's <b>quick filter</b> to see their work. Press <b>Next day</b> to run a day. Avoid adding work to a running sprint: Jira warns that sprint scope will be affected, and it changes the burndown and velocity.</p>`,tip:'In Jira: Active sprints → click a quick filter to see one person\'s cards. Dragging an issue into or out of a running sprint shows "Sprint scope will be affected by this action".',video:'JiraTutorial2, around 19 to 24 min (the board and quick filters) and JiraTutorial3 (adding a research spike mid-sprint, moving issues between sprint and backlog).',checks:()=>[['Move a card on the board yourself',!!S.flags.boardMove],['Hold 3 daily stand-ups (Next day)',(S.flags.days||0)>=3],['Remove a blocker as the Scrum Master',!!S.flags.unblock],['Decide what to do with an urgent new request',!!S.flags.scope]]},
+  {t:'Review the sprint',v:'reports',body:`<p>When the timebox ends, <b>complete the sprint</b>. Unfinished items go back to the backlog or into the next sprint. They never count as done.</p><p>At the <b>sprint review</b> the team shows stakeholders what's done and collects feedback. The <b>sprint report</b>, <b>burndown</b> and <b>velocity</b> charts help explain what happened.</p>`,tip:'In Jira: "Complete sprint" at the top of the board, then Reports → Sprint report, Burndown chart, Velocity report.',video:'Not covered in the videos. This is the next step of the Scrum cycle.',checks:()=>[['Complete the sprint',closedSprints().length>=1],['Open the sprint report',!!S.flags.viewReport]]},
+  {t:'Hold the retrospective',v:'retro',body:`<p>The <b>sprint retrospective</b> is about how the team worked, not what it built. Collect what went well and what to improve, vote for the most important points, and agree on one or two concrete <b>action items</b>.</p><p>Turn action items into backlog tasks so they actually happen in the next sprint.</p>`,tip:'Jira has no built-in retrospective board. Teams often use a Confluence retrospective page or a whiteboard, then create Jira tasks for the action items.',video:'Not covered in the videos.',checks:()=>{const r=c=>S.retro.some(n=>n.col===c);return [['Add something that went well',r('well')],['Add something to improve',r('improve')],['Vote on a note',S.retro.some(n=>n.votes>0)],['Add an action item and turn it into a backlog task',S.retro.some(n=>n.task)]]}},
+  {t:'Start the next sprint',v:'backlog',body:`<p>Scrum is a loop. Plan sprint 2 with what you learned. Your forecast now uses the <b>real velocity</b> from sprint 1, and the backlog has changed: new requests, unfinished work and retro actions.</p><p>Run it, complete it, and compare both sprints in the velocity report.</p>`,tip:'Velocity usually settles after 3 or 4 sprints. Use it to forecast, never as a target or to compare teams.',video:'Not covered in the videos.',checks:()=>[['Start sprint 2',S.sprints.filter(s=>s.state!=='future').length>=2],['Complete sprint 2',closedSprints().length>=2],['Compare the sprints in the velocity report',!!S.flags.viewReport2]]}
+];
+const NAV=v=>`[data-nav=${v}]`;
+const CHECKS=[
+  ()=>[],
+  ()=>{const x=S.site||{};return [['Create your account and site name',!!x.name,['.onb-acc input:placeholder-shown','[data-tour=su-next0]']],['Answer the welcome questions',!!(x.team&&x.role),['.onb .chips']],['Invite your team',!!x.inviteDone,['.onb input[type=email]:placeholder-shown','[data-tour=su-next3]']],['Answer the setup questions and pick Scrum',x.template==='scrum',['[data-tour=su-scrum]','.qs select.unset','[data-tour=su-next4]']]]},
+  ()=>[['Create a project with the Scrum template',!!S.project,['#pj-name:placeholder-shown','[data-tour=create-project]']],['Delete the default To Do, In Progress and Done columns',!!S.project&&!S.columns.some(c=>c.dflt),['.cm-col[data-default] [data-tour=col-del]','[data-tour=bs-columns]','[data-tour=board-settings]',NAV('setup')]],['Add the 9 working-agreement columns in order',columnsDone(),['#col-name','[data-tour=bs-columns]','[data-tour=board-settings]',NAV('setup')]]],
+  ()=>{const r=x=>S.team.filter(m=>m.role===x).length;const f=['#tm-name',NAV('team')];return [['Invite a Product Owner, a Scrum Master and 2+ Developers',r('Product Owner')>=1&&r('Scrum Master')>=1&&r('Developer')>=2,f],['Give team members their job titles',S.team.filter(m=>m.title).length>=3,['#tm-title',NAV('team')]],['Create a quick filter in JQL for a team member',S.qfs.some(q=>!q.builtin),['#qf-name:placeholder-shown','#qf-jql','[data-tour=bs-qf]','[data-tour=board-settings]',NAV('setup')]]]},
+  ()=>{const st=stories();return [['Create at least 2 epics (Epic Name + Summary)',S.epics.length>=2,['#ci-epicName','[data-tour=ci-create]','[data-tour=create-epic]',NAV('backlog')]],['Create at least 6 stories',st.length>=6,['#ci-summary','[data-tour=create-issue]',NAV('backlog')]],['Write a story as "As a… I want… so that…"',st.some(i=>STORY_RX.test(i.summary+' '+i.desc+' ')),['#md-desc','#ni-sum',NAV('backlog')]],['Give a story acceptance criteria and a Definition of Done',st.some(i=>i.ac.length>=1&&(i.dod||'').trim()),['#ac-new','.irow[data-type=story]',NAV('backlog')]],['Link every story to an epic',st.length>0&&st.every(i=>i.epic),['[data-tour=epic-select]','.irow[data-noepic]',NAV('backlog')]]]},
+  ()=>[['Estimate at least 6 stories (tasks get no points)',S.issues.filter(i=>i.points&&i.type!=='task').length>=6,['[data-tour=points]','.irow .fibrow','[data-tour=estimate]',NAV('backlog')]],['Run planning poker on a story (open a story)',!!S.flags.poker,['[data-tour=poker-act]','[data-tour=poker]','.irow[data-type=story]',NAV('backlog')]],['Reorder the backlog by dragging an issue',!!S.flags.reorder,['[data-sec=backlog] .irow ~ .irow .grip',NAV('backlog')]]],
+  ()=>{const sp=S.sprints.find(s=>s.state!=='closed')||S.sprints[S.sprints.length-1];const items=sp?sprintIssues(sp.id):[];const f=forecast().val;const started=S.sprints.some(s=>s.state!=='future');return [['Create the versions Release 1 and Release 2 - MVP',['release 1','release 2 - mvp'].every(n=>S.releases.some(r=>r.name.toLowerCase()===n)),['#rl-name','[data-tour=create-version]',NAV('releases')]],['Create a sprint',S.sprints.length>0,['[data-tour=create-sprint]',NAV('backlog')]],['Put issues in the sprint, all estimated',started||(items.length>0&&items.every(i=>i.points||i.type==='task')),['[data-sec=backlog] .irow .grip',NAV('backlog')]],['Stay within the forecast capacity',started?S.sprints.some(s=>s.state!=='future'&&s.committed<=Math.max(f,s.forecast||0)):(items.length>0&&sum(items)<=f),['.cap',NAV('backlog')]],['Assign every sprint issue to someone',started||(items.length>0&&items.every(i=>i.assignee)),['[data-tour=assignee-select]','.irow',NAV('backlog')]],['Set Fix version to Release 1 on the sprint issues',items.length>0&&items.every(i=>i.fix),['[data-tour=fix-select]','.irow',NAV('backlog')]],['Start the sprint with a sprint goal',started,['#sp-goal','[data-tour=start-sprint]',NAV('backlog')]]]},
+  ()=>[['Use a quick filter to see one person\'s work',!!S.flags.qfUsed,['.qf button',NAV('board')]],['Move a card on the board yourself',!!S.flags.boardMove,['.col.c-sprintbacklog .bcard','.col .bcard',NAV('board')]],['Hold 3 daily stand-ups (Next day)',(S.flags.days||0)>=3,['[data-tour=next-day]',NAV('board')]],['Remove a blocker as the Scrum Master',!!S.flags.unblock,['[data-tour=unblock]','.col.c-blocked .bcard','[data-tour=next-day]',NAV('board')]],['Decide what to do with an urgent new request',!!S.flags.scope,['.dialog .acts .btn','[data-tour=next-day]',NAV('board')]]],
+  ()=>[['Complete the sprint',closedSprints().length>=1,['.dialog .btn.primary','[data-tour=complete]',NAV('board')]],['Open the sprint report',!!S.flags.viewReport,[NAV('reports')]]],
+  ()=>{const r=c=>S.retro.some(n=>n.col===c);return [['Add something that went well',r('well'),['#rt-well',NAV('retro')]],['Add something to improve',r('improve'),['#rt-improve',NAV('retro')]],['Vote on a note',S.retro.some(n=>n.votes>0),['.vote',NAV('retro')]],['Add an action item and turn it into a backlog task',S.retro.some(n=>n.task),['[data-tour=retro-task]','#rt-action',NAV('retro')]]]},
+  ()=>[['Start sprint 2',S.sprints.filter(s=>s.state!=='future').length>=2,['#sp-goal','[data-tour=start-sprint]','[data-tour=create-sprint]',NAV('backlog')]],['Complete sprint 2',closedSprints().length>=2,['.dialog .btn.primary','[data-tour=complete]','[data-tour=next-day]',NAV('board')]],['Compare the sprints in the velocity report',!!S.flags.viewReport2,[NAV('reports')]]]
+];
+STAGES.forEach((x,k)=>x.checks=CHECKS[k]);
+const stageDone=i=>{const c=STAGES[i].checks();return c.length>0&&c.every(x=>x[1])};
+
+/* ---------- actions ---------- */
+const A={};
+A.go=v=>{if(v==='boardsettings'&&!UI.bsTab)UI.bsTab='columns';if(v!=='setup'&&!S.project){toast('Create the project first.');return}S.view=v;if(v==='reports'){if(closedSprints().length)S.flags.viewReport=true;if(closedSprints().length>=2)S.flags.viewReport2=true}commit()};
+A.stage=i=>{S.stage=Math.max(0,Math.min(STAGES.length-1,i));const v=STAGES[S.stage].v;if(v==='setup'||S.project)A.go(v);else commit()};
+A.toggleLesson=()=>{S.lesson=!S.lesson;commit()};
+A.toggleHints=()=>{S.hints=S.hints===false;commit()};
+A.reset=()=>dialog('Reset the whole project?','<p>This deletes your project, team, backlog, sprints and retrospective in this browser and starts again from the beginning. It can\'t be undone.</p>',[{label:'Cancel'},{label:'Reset everything',kind:'primary',fn:()=>{S=fresh();UI.modal=null;UI.poker=null}}]);
+A.fill=what=>{
+  if(what==='site'||(!S.site&&what!=='site')){if(!S.site||!S.site.template){S.site={email:'nick.s@synthesiscorp.net',first:'Nick',last:'Stekovic',name:'vangelisautoshow',team:'Software Development',role:'Scrum Master',inviteDone:true,skippedInvite:true,newJira:'new to',newAgile:'new to',work:'features',schedule:'tight',template:'scrum'};S.onb=5;if(!S.team.some(m=>m.name==='Nick Stekovic'))S.team.push({id:uid(),name:'Nick Stekovic',role:'Scrum Master'});}S.view='setup'}
+  if(what==='project'){if(!S.project)S.project={name:'Vangelis Auto Show',key:'VAS',template:'scrum',mgmt:'company'};if(!columnsDone())nineColumns();S.view='setup'}
+  if(what==='team'){if(!S.project)A.fill('project');SAMPLE_TEAM.forEach(([n,r,t])=>{const m=S.team.find(m=>m.name===n);if(m){if(!m.title)m.title=t}else S.team.push({id:uid(),name:n,role:r,title:t})});SAMPLE_QF.forEach(([n,j,d])=>{if(!S.qfs.some(q=>q.name===n)){const m=qfMember(j);if(m)S.qfs.push({id:uid(),name:n,jql:j,desc:d,member:m.id})}});S.view='team'}
+  if(what==='backlog'){if(!S.project)A.fill('project');if(!S.team.length)A.fill('team');ensureReleases();SAMPLE_EPICS.forEach(n=>{if(!S.epics.some(x=>x.name===n))S.epics.push({id:uid(),key:nextKey(),name:n,summary:EPIC_SUMMARY[n]||'',desc:'',color:EPIC_COLORS[S.epics.length%EPIC_COLORS.length]})});const eid=n=>(S.epics.find(x=>x.name===n)||{}).id||null;SAMPLE_ITEMS.forEach(([en,type,summary,size,p,ac,dod,fix,desc,who,labels])=>{if(!S.issues.some(i=>i.summary===summary)){const m=S.team.find(t=>t.name===who);newIssue({type,summary,size,prio:p,ac:ac.slice(),dod:dod||'',fix:fix||null,desc:desc||'',epic:eid(en),assignee:m?m.id:null,labels:labels||''})}});S.view='backlog'}
+  if(what==='estimate'){S.issues.forEach(i=>{if(!i.points&&i.type!=='task')i.points=i.size||3});S.view='backlog'}
+  if(what==='plan'){ensureReleases();let sp=S.sprints.find(s=>s.state==='future');if(!sp)sp=makeSprint();if(!sp.goal)sp.goal='Navigation Completion; Screen Saver Look & Feel';const f=forecast().val;let total=sum(sprintIssues(sp.id));for(const i of backlogIssues()){if(i.status==='done')continue;const p=i.type==='task'?0:(i.points||i.size||3);if(total+p>f)continue;if(i.type!=='task')i.points=i.points||p;i.sprint=sp.id;if(!i.fix)i.fix='Release 1';total+=p}const D=devs();sprintIssues(sp.id).forEach((i,n)=>{if(!i.assignee&&D.length)i.assignee=D[n%D.length].id});S.view='backlog'}
+  toast('Sample data from the Vangelis Auto Show project added. Change anything you like.');commit()
+};
+A.pickTpl=t=>{UI.tpl=t;render()};
+A.pickMgmt=m=>{UI.mgmt=m;render()};
+A.keyFromName=v=>{const el=document.getElementById('pj-key');if(el&&!el.dataset.touched){const words=v.trim().split(/\s+/).filter(Boolean);let k=words.length>1?words.map(w=>w[0]).join(''):v.replace(/[^a-z]/gi,'').slice(0,3);el.value=k.toUpperCase().replace(/[^A-Z]/g,'').slice(0,5)}};
+A.createProject=()=>{const name=val('pj-name').trim(),key=val('pj-key').trim().toUpperCase().replace(/[^A-Z]/g,'');if(UI.tpl!=='scrum'){toast('This course uses Scrum. Kanban has no sprints, so choose the Scrum template.');return}if(!name){toast('Give the project a name.');return}if(key.length<2){toast('The key needs at least 2 letters, for example FC.');return}S.project={name,key,template:'scrum',mgmt:UI.mgmt};toast(`Project ${name} created. Issues will be numbered ${key}-1, ${key}-2…`);commit()};
+A.addRelease=()=>{const v=val('rl-name').trim();if(!v){toast('Give the version a name, e.g. Release 3.');return}if(!S.releases.some(r=>r.name===v))S.releases.push({name:v,start:val('rl-start'),end:val('rl-end'),desc:val('rl-desc').trim()});commit()};
+A.delRelease=k=>{const r=S.releases[k].name;S.releases.splice(k,1);S.issues.forEach(i=>{if(i.fix===r)i.fix=null});commit()};
+function qfMember(jql){const m=/^\s*assignee\s*=\s*["']?([^"']+?)["']?\s*$/i.exec(jql||'');if(!m)return null;const q=m[1].trim().toLowerCase();return S.team.find(t=>t.name.toLowerCase()===q)||S.team.find(t=>t.name.toLowerCase().split(' ')[0]===q)||null}
+A.addQF=()=>{const n=val('qf-name').trim(),j=val('qf-jql').trim(),d=val('qf-desc').trim();if(!n){toast('Give the quick filter a name, e.g. Sandra Price.');return}if(!/^\s*assignee\s*=/i.test(j)){UI.qfErr='Write the JQL as: assignee = "Sandra Price"';render();return}const m=qfMember(j);if(!m){const who=(/=\s*["']?([^"']+?)["']?\s*$/.exec(j)||[,''])[1];UI.qfErr=`The user "${who}" doesn't exist. Invite them on the Team page first, then add the filter.`;render();return}UI.qfErr=null;S.qfs.push({id:uid(),name:n,jql:j,desc:d||'All tasks for '+m.name,member:m.id});toast(`Quick filter "${n}" added. It now shows on the board.`);commit()};
+A.delQF=id=>{S.qfs=S.qfs.filter(q=>q.id!==id);if(UI.qf===id)UI.qf=null;commit()};
+A.renameProject=v=>{if(v.trim()){S.project.name=v.trim();commit()}};
+A.addMember=()=>{const n=val('tm-name').trim();if(!n){toast('Type a name first.');return}S.team.push({id:uid(),name:n,role:val('tm-role'),title:val('tm-title').trim()});toast(n+' invited to the site.');commit();setTimeout(()=>{const el=document.getElementById('tm-name');if(el)el.focus()},0)};
+A.setRole=(id,r)=>{member(id).role=r;commit()};
+A.setTitle=(id,t)=>{member(id).title=t;commit()};
+A.removeMember=id=>{S.team=S.team.filter(m=>m.id!==id);S.issues.forEach(i=>{if(i.assignee===id)i.assignee=null});commit()};
+A.openCreate=(type)=>{UI.create={type:type||'story',summary:'',desc:'',epicName:'',assignee:'',prio:'Medium',labels:'',epic:S.filterEpic||'',sprint:'',fix:'',another:false};render();setTimeout(()=>{const e=document.getElementById(type==='epic'?'ci-epicname':'ci-sum');if(e)e.focus()},0)};
+function readCI(){const c=UI.create;['summary','desc','epicName','assignee','prio','labels','epic','sprint','fix'].forEach(f=>{const e=document.getElementById('ci-'+f);if(e)c[f]=e.value});const a=document.getElementById('ci-another');if(a)c.another=a.checked;return c}
+A.ciType=v=>{readCI();UI.create.type=v;render()};
+A.ciClose=()=>{UI.create=null;render()};
+A.ciSubmit=()=>{const c=readCI();if(!c.summary.trim()){toast('Summary is required.');return}
+  if(c.type==='epic'){if(!c.epicName.trim()){toast('Epic Name is required: a short name to identify the epic.');return}if(S.epics.some(e=>e.name.toLowerCase()===c.epicName.trim().toLowerCase())){toast('An epic with that name exists.');return}const e={id:uid(),key:nextKey(),name:c.epicName.trim(),summary:c.summary.trim(),desc:c.desc,color:EPIC_COLORS[S.epics.length%EPIC_COLORS.length]};S.epics.push(e);toast(`${e.key} ${e.name} created.`)}
+  else{const i=newIssue({type:c.type,summary:c.summary.trim(),desc:c.desc,assignee:c.assignee||null,prio:c.prio,labels:c.labels,epic:c.epic||null,fix:c.fix||null,size:c.type==='task'?2:[2,3,5,5,8][Math.floor(Math.random()*5)]});toast(`${i.key} created.`);if(c.sprint){const sp=sprintOf(c.sprint);if(sp&&sp.state==='active'){const keep=c.another;UI.create=keep?Object.assign(c,{summary:'',desc:''}):null;return scopeGuard(i,c.sprint)}moveIssue(i,c.sprint)}}
+  if(c.another){Object.assign(c,{summary:'',desc:'',epicName:''});commit();setTimeout(()=>{const e=document.getElementById(c.type==='epic'?'ci-epicname':'ci-sum');if(e)e.focus()},0)}else{UI.create=null;commit()}};
+function createHTML(){const c=UI.create;const o=(list,cur)=>list.map(([v,l])=>`<option value="${esc(v)}" ${v===cur?'selected':''}>${esc(l)}</option>`).join('');const ep=c.type==='epic';
+  return `<div class="overlay" style="z-index:25" onclick="if(event.target===this)A.ciClose()"><div class="dialog" style="width:min(640px,100%)" role="dialog" aria-modal="true" aria-label="Create issue"><div class="row-flex" style="justify-content:space-between"><h2>Create issue</h2></div>
+  <label class="f">Project<input value="${esc(S.project.name)} (${esc(S.project.key)})" disabled></label>
+  <label class="f" for="ci-type">Issue Type<select id="ci-type" style="max-width:240px" onchange="A.ciType(this.value)">${o([['story','Story'],['task','Task'],['bug','Bug'],['epic','Epic']],c.type)}</select></label>
+  ${ep?`<label class="f" for="ci-epicName">Epic Name <span class="hint">A short name to identify this epic, e.g. Audio System</span><input id="ci-epicName" value="${esc(c.epicName)}"></label>`:''}
+  <label class="f" for="ci-summary">Summary<input id="ci-summary" value="${esc(c.summary)}" placeholder="${ep?'As a user, I would like to…':'As a Neo vehicle enthusiast, I would like … so that …'}"></label>
+  <label class="f" for="ci-desc">Description <span class="hint">${ep?'':'Story, then *ACCEPTANCE CRITERIA* and *DEFINITION OF DONE*'}</span><textarea id="ci-desc">${esc(c.desc)}</textarea></label>
+  ${ep?'':`<div class="grid2" style="gap:10px">
+    <label class="f" for="ci-assignee">Assignee<select id="ci-assignee">${o([['','Unassigned'],...S.team.filter(m=>m.role!=='Stakeholder').map(m=>[m.id,m.name])],c.assignee)}</select></label>
+    <label class="f" for="ci-prio">Priority<select id="ci-prio">${o(PRIOS.map(x=>[x,x]),c.prio)}</select></label>
+    <label class="f" for="ci-labels">Labels<input id="ci-labels" value="${esc(c.labels)}" placeholder="e.g. Audio System"></label>
+    <label class="f" for="ci-epic">Epic Link<select id="ci-epic">${o([['','None'],...S.epics.map(e=>[e.id,e.name])],c.epic)}</select></label>
+    <label class="f" for="ci-sprint">Sprint<select id="ci-sprint">${o([['','None (Backlog)'],...S.sprints.filter(x=>x.state!=='closed').map(x=>[x.id,x.name+(x.state==='active'?' (active)':'')])],c.sprint)}</select></label>
+    <label class="f" for="ci-fix">Fix Version<select id="ci-fix">${o([['','None'],...S.releases.map(r=>[r.name,r.name])],c.fix)}</select></label></div>`}
+  <div class="acts" style="align-items:center"><label class="row-flex" style="margin-right:auto;font-size:14px;flex-wrap:nowrap"><input id="ci-another" type="checkbox" style="width:auto" ${c.another?'checked':''}>Create another</label><button class="btn" onclick="A.ciClose()">Cancel</button><button class="btn primary" data-tour="ci-create" onclick="A.ciSubmit()">Create</button></div></div></div>`}
+A.addEpic=()=>{const n=val('ep-name').trim();if(!n){toast('Type an epic name first.');return}S.epics.push({id:uid(),key:nextKey(),name:n,desc:'',color:EPIC_COLORS[S.epics.length%EPIC_COLORS.length]});commit()};
+A.filterEpic=id=>{S.filterEpic=S.filterEpic===id?null:id;commit()};
+A.createIssue=()=>{const s=val('ni-sum').trim();if(!s){toast('Type a summary first.');return}const type=val('ni-type');newIssue({type,summary:s,epic:S.filterEpic||null,size:[2,3,5,5,8][Math.floor(Math.random()*5)]});UI.newType=type;commit();setTimeout(()=>{const el=document.getElementById('ni-sum');if(el)el.focus()},0)};
+A.toggleEstimate=()=>{UI.estimate=!UI.estimate;render()};
+A.quickPts=(e,id,v)=>{e.stopPropagation();const i=byId(id);i.points=i.points===v?null:v;commit()};
+A.open=id=>{UI.modal=id;UI.poker=null;render()};
+A.close=()=>{UI.modal=null;UI.poker=null;commit()};
+A.set=(id,f,v)=>{const i=byId(id);if(f==='type'&&v==='task')i.points=null;if(f==='summary'&&!v.trim())return;if(f==='sprint'){return scopeGuard(i,v||null)}if(f==='status'){setStatus(i,v);if(activeSprint()&&i.sprint===activeSprint().id)S.flags.boardMove=true}else if(f==='assignee'||f==='epic'||f==='fix'){i[f]=v||null}else i[f]=v;commit()};
+A.setPts=(id,v)=>{const i=byId(id);i.points=i.points===v?null:v;commit()};
+A.storyTpl=id=>{const i=byId(id);if(!STORY_RX.test(i.summary+' '+i.desc+' ')){i.summary='As a [role], I would like [goal] so that [why]'}commit();setTimeout(()=>{const el=document.getElementById('md-sum');if(el){el.focus();el.select()}},0)};
+A.addAC=id=>{const v=val('ac-new').trim();if(!v)return;byId(id).ac.push(v);commit();setTimeout(()=>{const el=document.getElementById('ac-new');if(el)el.focus()},0)};
+A.delAC=(id,k)=>{byId(id).ac.splice(k,1);commit()};
+A.addSub=id=>{const v=val('st-new').trim();if(!v)return;byId(id).subtasks.push({id:uid(),t:v,done:false});commit();setTimeout(()=>{const el=document.getElementById('st-new');if(el)el.focus()},0)};
+A.togSub=(id,k)=>{const s=byId(id).subtasks[k];s.done=!s.done;commit()};
+A.delSub=(id,k)=>{byId(id).subtasks.splice(k,1);commit()};
+A.unblock=id=>{const i=byId(id);i.blocked=null;if(i.status==='blocked')i.status=i.prevStatus&&i.prevStatus!=='blocked'?i.prevStatus:'development';S.flags.unblock=true;toast('Blocker removed. Removing impediments is a core Scrum Master job.');commit()};
+A.flag=id=>{const i=byId(id);setStatus(i,'blocked');commit()};
+A.delIssue=id=>{const i=byId(id);dialog('Delete '+i.key+'?',`<p>"${esc(i.summary)}" will be removed for good.</p>`,[{label:'Cancel'},{label:'Delete',kind:'primary',fn:()=>{S.issues=S.issues.filter(x=>x.id!==id);UI.modal=null}}])};
+
+/* planning poker */
+A.poker=id=>{const i=byId(id);const D=devs();if(D.length<2){toast('Planning poker needs at least 2 Developers on the Team page.');return}const size=i.size||3;UI.poker={id,round:1,revealed:false,votes:D.map(d=>({who:d.name,v:vote(size,1)}))};render()};
+function vote(size,round){let k=FIB.indexOf(size);if(k<0)k=2;const r=Math.random();let d=0;if(round===1){if(r<.2)d=-2;else if(r<.4)d=-1;else if(r<.6)d=1;else if(r<.72)d=2}else{if(r<.15)d=-1;else if(r<.3)d=1}return FIB[Math.max(0,Math.min(FIB.length-1,k+d))]}
+A.reveal=()=>{UI.poker.revealed=true;render()};
+A.revote=()=>{const p=UI.poker;const i=byId(p.id);p.round++;p.revealed=false;p.votes=p.votes.map(x=>({who:x.who,v:vote(i.size||3,2)}));render()};
+A.agree=v=>{const i=byId(UI.poker.id);i.points=v;S.flags.poker=true;UI.poker=null;toast(`${i.key} estimated at ${v} points.`);commit()};
+
+/* drag and drop */
+A.dragStart=(e,id)=>{UI.drag=id;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id)}catch(_){}};
+A.over=e=>{e.preventDefault();const t=e.currentTarget;t.classList.add(t.classList.contains('irow')?'drag-over':'dropping')};
+A.leave=e=>{e.currentTarget.classList.remove('drag-over','dropping')};
+A.dropRow=(e,targetId)=>{e.preventDefault();e.stopPropagation();const id=UI.drag;UI.drag=null;if(!id||id===targetId)return render();const i=byId(id),t=byId(targetId);const dest=t.sprint||null;const moved=(i.sprint||null)!==dest;const fa=i.sprint&&sprintOf(i.sprint).state==='active',ta=dest&&sprintOf(dest).state==='active';if(moved&&(fa||ta))return scopeGuard(i,dest,()=>{i.rank=maxRank()+1});moveIssue(i,dest);const list=S.issues.filter(x=>(x.sprint||null)===dest&&x.id!==i.id).sort(byRank);const k=list.indexOf(t);list.splice(k,0,i);const base=list.length?Math.min(...list.map(x=>x.rank)):0;list.forEach((x,n)=>x.rank=base+n*0.001+ (n));if(!moved)S.flags.reorder=true;normalizeRanks();commit()};
+A.dropSection=(e,dest)=>{e.preventDefault();const id=UI.drag;UI.drag=null;if(!id)return render();const i=byId(id);const d=dest==='backlog'?null:dest;if((i.sprint||null)!==d){return scopeGuard(i,d,()=>{i.rank=maxRank()+1})}commit()};
+A.dropCol=(e,k)=>{e.preventDefault();const id=UI.drag;UI.drag=null;if(!id)return render();const i=byId(id);const c=S.columns[k];if(!c||!c.statuses.length)return render();if(c.statuses.includes(i.status))return render();const status=c.statuses.includes('sprintbacklog')?'sprintbacklog':c.statuses[0];if(i.status!==status){setStatus(i,status);S.flags.boardMove=true;if(status==='blocked')toast(i.key+' moved to Blocked. The Scrum Master should help remove the impediment.')}commit()};
+function normalizeRanks(){S.issues.slice().sort(byRank).forEach((x,n)=>x.rank=n+1)}
+function scopeGuard(i,dest,after){const from=i.sprint?sprintOf(i.sprint):null,to=dest?sprintOf(dest):null;const touches=(from&&from.state==='active')||(to&&to.state==='active');if(!touches||(from&&to&&from.id===to.id)){moveIssue(i,dest);after&&after();return commit()}
+  dialog('Sprint scope will be affected',`<p>${to&&to.state==='active'?`Adding <b>${i.key}</b> to the running sprint`:`Removing <b>${i.key}</b> from the running sprint`} changes the scope the team committed to at sprint planning.</p><p>Jira tracks the sprint from the moment it started, so this shows up in the burndown and can distort the team's velocity. As a rule, don't add work to a running sprint; put it in the backlog for the next sprint planning.</p>`,[{label:'Cancel'},{label:'Change scope anyway',kind:'primary',fn:()=>{moveIssue(i,dest);after&&after()}}])}
+function moveIssue(i,dest){const from=i.sprint?sprintOf(i.sprint):null;const to=dest?sprintOf(dest):null;if(from&&from.state==='closed'){toast('That issue belongs to a closed sprint.');return}if(to&&to.state==='closed')return;if(to&&to.state==='active'&&!(from&&from.id===to.id)){to.scopeAdded=(to.scopeAdded||0)+pts(i);i.mid=true;to.changes=(to.changes||[]);to.changes.push({day:to.day,delta:pts(i)});if(i.status==='backlog')i.status='sprintbacklog';toast(`${i.key} added to the active sprint. That changes the scope the team committed to.`)}if(from&&from.state==='active'&&!(to&&to.id===from.id)){from.changes=(from.changes||[]);from.changes.push({day:from.day,delta:-pts(i)})}i.sprint=dest}
+
+/* sprints */
+function makeSprint(){const n=S.sprints.length+1;const prev=S.sprints[S.sprints.length-1];const sp={id:uid(),name:`${S.project.key} Sprint ${n}`,goal:'',length:10,weeks:2,start:prev&&prev.start?addDays(prev.start,(prev.weeks||2)*7):'2019-07-01',state:'future',day:0,burn:[],committed:0,completed:0,scopeAdded:0,changes:[],standup:null};S.sprints.push(sp);return sp}
+A.createSprint=()=>{makeSprint();toast('Sprint created. Drag issues from the backlog into it.');commit()};
+A.editSprint=id=>{const sp=sprintOf(id);dialog('Edit sprint',sprintFields(sp),[{label:'Cancel'},{label:'Save',kind:'primary',fn:()=>readSprintFields(sp)}])};
+A.delSprint=id=>{const sp=sprintOf(id);dialog('Delete '+sp.name+'?','<p>Its issues go back to the backlog.</p>',[{label:'Cancel'},{label:'Delete sprint',kind:'primary',fn:()=>{S.issues.forEach(i=>{if(i.sprint===id)i.sprint=null});S.sprints=S.sprints.filter(s=>s.id!==id)}}])};
+function sprintFields(sp){const w=sp.weeks||2;return `<label class="f">Sprint name<input id="sp-name" value="${esc(sp.name)}"></label><div class="row-flex" style="flex-wrap:nowrap"><label class="f" style="flex:1">Duration<select id="sp-len" onchange="A.spEnd()">${[1,2,3,4].map(n=>`<option value="${n}" ${n===w?'selected':''}>${n} week${n>1?'s':''}</option>`).join('')}</select></label><label class="f" style="flex:1">Start date<input id="sp-start" type="date" value="${esc(sp.start||'')}" onchange="A.spEnd()"></label><label class="f" style="flex:1">End date<input id="sp-end" type="date" value="${esc(sp.start?addDays(sp.start,w*7):'')}" disabled></label></div><label class="f">Sprint goal <span class="hint">e.g. Navigation Completion; Screen Saver Look &amp; Feel</span><textarea id="sp-goal" placeholder="Navigation Completion; Screen Saver Look &amp; Feel">${esc(sp.goal)}</textarea></label>`}
+A.spEnd=()=>{const st=val('sp-start'),w=+val('sp-len')||2;const e=document.getElementById('sp-end');if(e)e.value=st?addDays(st,w*7):''};
+function readSprintFields(sp){sp.name=val('sp-name').trim()||sp.name;sp.goal=val('sp-goal').trim();sp.weeks=+val('sp-len')||2;sp.length=sp.weeks*5;sp.start=val('sp-start')||sp.start}
+
+A.askStart=id=>{const sp=sprintOf(id);if(activeSprint()){toast('Another sprint is already running. Complete it first.');return}const items=sprintIssues(id);if(!items.length){toast('Drag some issues into the sprint first.');return}const f=forecast();const total=sum(items);const unest=items.filter(i=>!i.points&&i.type!=='task');let warn='';if(unest.length)warn+=`<div class="note-bad">${unest.length} issue${unest.length>1?'s are':' is'} not estimated (${unest.map(i=>i.key).join(', ')}). The team can't tell if it fits. Estimate them first.</div>`;if(total>f.val)warn+=`<div class="note-warn">You're committing to <b>${total}</b> points, but the forecast is <b>${f.val}</b> (${f.why}). An overloaded sprint usually ends with unfinished work.</div>`;const big=items.filter(i=>(i.points||0)>=13);if(big.length)warn+=`<div class="note-warn">${big.map(i=>i.key).join(', ')} ${big.length>1?'are':'is'} 13+ points. Stories that big rarely finish in one sprint; consider splitting.</div>`;
+  dialog('Start sprint',`<p><b>${items.length}</b> issues will be included in this sprint (${total} points; forecast ${f.val}).</p>${warn}${sprintFields(sp)}`,[{label:'Cancel'},{label:'Start',kind:'primary',fn:()=>{readSprintFields(sp);if(!sp.goal){toast('Add a sprint goal. It keeps the team focused when plans change.');return false}if(unest.length){toast('Estimate every issue before starting.');return false}sprintIssues(sp.id).forEach(i=>{if(i.status==='backlog')i.status='sprintbacklog'});sp.state='active';sp.day=0;sp.committed=sum(sprintIssues(sp.id));sp.forecast=f.val;sp.burn=[sp.committed];sp.scopeAdded=0;sp.changes=[];sp.evBlock=false;sp.evScope=false;S.view='board';toast(sp.name+' started. Day 0: time for the first Daily Scrum.')}}])};
+A.nextDay=()=>{const sp=activeSprint();if(!sp)return;if(sp.day>=sp.length){toast('The sprint timebox is over. Complete the sprint.');return}const D=devs();if(!D.length){toast('Add Developers on the Team page first.');return}
+  const items=sprintIssues(sp.id);const lines=[];const before=new Map(items.map(i=>[i.id,i.status]));
+  const signed=items.filter(i=>i.status==='uat');signed.forEach(i=>i.status='done');
+  const passed=items.filter(i=>i.status==='qa');passed.forEach(i=>i.status='uat');
+  const phase=(i)=>{const need=i.points||i.size||3;const f=(i.progress||0)/need;return f<.2?'design':(f<.7?'development':(f<1?'unittesting':'qa'))};
+  D.forEach(d=>{const y=[];let t='';let b='None';
+    const fin=signed.filter(i=>i.assignee===d.id);if(fin.length)y.push(`${fin.map(i=>i.key).join(', ')} signed off in UAT (Done)`);
+    const qa=passed.filter(i=>i.assignee===d.id);if(qa.length)y.push(`${qa.map(i=>i.key).join(', ')} passed QA`);
+    let cur=items.find(i=>i.assignee===d.id&&WORKING.includes(i.status));
+    if(!cur){cur=items.find(i=>WORKING.includes(i.status)&&!i.assignee)||items.find(i=>i.status==='sprintbacklog'&&i.assignee===d.id)||items.find(i=>i.status==='sprintbacklog'&&!i.assignee)||items.find(i=>i.status==='sprintbacklog');if(cur&&cur.assignee&&cur.assignee!==d.id){const o=member(cur.assignee);y.push(`took over ${cur.key} from ${o?o.name.split(' ')[0]:'a teammate'}, who is busy`)}if(cur){cur.assignee=d.id;if(cur.status==='sprintbacklog')cur.status='design';y.push(`picked up ${cur.key}`)}}
+    if(cur){const need=cur.points||cur.size||3;const before=cur.status;cur.progress=(cur.progress||0)+0.6+Math.random()*0.7;const ph=phase(cur);if(ph!==before&&WORKING.indexOf(ph)>WORKING.indexOf(before)||ph==='qa')cur.status=ph;
+      if(cur.status==='qa'){y.push(`finished unit testing on ${cur.key}, handed to QA`);t='Pick up the next item from the Current Sprint Backlog'}
+      else{y.push(`worked on ${cur.key} (${statusLabel(before)})`);t=`${statusLabel(cur.status)} on ${cur.key} (${Math.min(95,Math.round(100*cur.progress/need))}%)`}}
+    else{const sw=items.filter(i=>WORKING.includes(i.status)&&i.assignee!==d.id).sort((x,z)=>((z.points||z.size||3)-(z.progress||0))-((x.points||x.size||3)-(x.progress||0)))[0];
+      if(sw){const need=sw.points||sw.size||3;sw.progress=(sw.progress||0)+0.5+Math.random()*0.6;const ph=phase(sw);if(ph==='qa'||WORKING.indexOf(ph)>WORKING.indexOf(sw.status))sw.status=ph;const ow=member(sw.assignee);y.push(`paired with ${ow?ow.name.split(' ')[0]:'the team'} on ${sw.key}`);t=`Keep swarming on ${sw.key} (${Math.min(100,Math.round(100*sw.progress/need))}%)`}
+      else{y.push('helped with QA and reviews');t='Help teammates finish what\'s in progress'}}
+    const bl=items.find(i=>i.assignee===d.id&&i.status==='blocked');if(bl)b=`${bl.key}: ${bl.blocked}`;
+    lines.push({who:d.name,y:y.join('; ')||'—',t,b})});
+  sp.day++;items.forEach(i=>{if(before.get(i.id)!==i.status)i.updDay=sp.day});sp.burn[sp.day]=remaining(sp);sp.standup={day:sp.day,lines};S.flags.days=(S.flags.days||0)+1;
+  let ev=null;
+  if(!sp.evBlock&&sp.day>=2){const c=items.find(i=>WORKING.includes(i.status));if(c){c.prevStatus=c.status;c.status='blocked';c.blocked=BLOCKERS[Math.floor(Math.random()*BLOCKERS.length)];sp.evBlock=true;ev=()=>toast(`Blocker! ${c.key} moved to Blocked: ${c.blocked}. Open the card to remove it.`)}}
+  if(!ev&&!sp.evScope&&sp.day>=4){sp.evScope=true;const r=REQUESTS[closedSprints().length%REQUESTS.length];const bug=newIssue({type:'bug',summary:r[0],desc:r[1],prio:'Highest',points:3,size:3,rank:minRank()-1,fix:'Release 1'});ev=()=>scopeDialog(bug,sp)}
+  commit();if(ev)ev();else if(sp.day>=sp.length)toast('Last day of the sprint. Time to complete it.');};
+function scopeDialog(bug,sp){const stake=S.team.find(m=>m.role==='Stakeholder')||{name:'The Vangelis event manager'};const po=S.team.find(m=>m.role==='Product Owner');dialog('Urgent request from a stakeholder',`<p><b>${esc(stake?stake.name:'A stakeholder')}</b>: "${esc(bug.summary)}." ${esc(bug.desc)}</p><p>${bug.key} has been created as a 3-point bug. The sprint is on day ${sp.day} of ${sp.length}. What does ${esc(po?po.name+' (Product Owner)':'the Product Owner')} decide?</p><div class="note-warn">There's no single right answer. Adding work mid-sprint changes the scope the team committed to; if you add it, consider taking something else out. A real production crash is a common reason to do it anyway.</div>`,[{label:'Put it at the top of the backlog',fn:()=>{S.flags.scope=true;toast(`${bug.key} is at the top of the backlog for the next sprint planning.`)}},{label:'Add it to the current sprint',kind:'primary',fn:()=>{S.flags.scope=true;moveIssue(bug,sp.id);bug.rank=minRank()-1}}])}
+A.askComplete=()=>{const sp=activeSprint();if(!sp)return;const items=sprintIssues(sp.id);const done=items.filter(i=>i.status==='done'),open=items.filter(i=>i.status!=='done');const future=S.sprints.find(s=>s.state==='future');
+  dialog('Complete '+sp.name,`<div class="stats"><div class="stat"><b>${done.length}</b><span>issues done</span></div><div class="stat"><b>${sum(done)}</b><span>points done (velocity)</span></div><div class="stat"><b>${open.length}</b><span>not done</span></div></div>${sp.day<sp.length?`<div class="note-warn">There ${sp.length-sp.day===1?'is':'are'} still ${sp.length-sp.day} day${sp.length-sp.day===1?'':'s'} left. Sprints normally run their full timebox.</div>`:''}${open.length?`<p>Unfinished issues don't count toward velocity:</p><ul>${open.map(i=>`<li>${i.key} ${esc(i.summary)} <span class="muted">(${pts(i)} pts, ${statusLabel(i.status)})</span></li>`).join('')}</ul><label class="f">Move unfinished issues to<select id="cs-dest"><option value="">Top of the backlog</option>${future?`<option value="${future.id}">${esc(future.name)}</option>`:''}<option value="new">A new sprint</option></select></label>`:'<p>Everything is done. Great sprint.</p>'}`,[{label:'Cancel'},{label:'Complete sprint',kind:'primary',fn:()=>{let dest=val('cs-dest')||null;if(dest==='new')dest=makeSprint().id;sp.burn[sp.day]=remaining(sp);sp.completed=sum(done);sp.doneKeys=done.map(i=>i.key);sp.openKeys=open.map(i=>i.key);sp.state='closed';const top=minRank();open.forEach((i,n)=>{i.sprint=dest;i.mid=false;if(!dest)i.rank=top-open.length+n});S.reportSprint=sp.id;S.retroSprint=sp.id;S.view='reports';S.flags.viewReport=true;if(closedSprints().length>=2)S.flags.viewReport2=true;toast(`${sp.name} completed with ${sp.completed} points. Next: sprint review, then the retrospective.`)}}])};
+A.reportSprint=id=>{S.reportSprint=id;commit()};
+A.retroSprint=id=>{S.retroSprint=id;commit()};
+A.addRetro=col=>{const v=val('rt-'+col).trim();if(!v)return;const sid=S.retroSprint||(closedSprints().slice(-1)[0]||{}).id;S.retro.push({id:uid(),sprint:sid,col,text:v,votes:0,task:null});commit();setTimeout(()=>{const el=document.getElementById('rt-'+col);if(el)el.focus()},0)};
+A.voteRetro=id=>{const n=S.retro.find(x=>x.id===id);n.votes++;commit()};
+A.delRetro=id=>{S.retro=S.retro.filter(x=>x.id!==id);commit()};
+A.retroTask=id=>{const n=S.retro.find(x=>x.id===id);const i=newIssue({type:'task',summary:n.text,prio:'High',size:2,rank:minRank()-1,desc:'Action item from the retrospective.'});n.task=i.key;toast(`${i.key} created at the top of the backlog.`);commit()};
+
+/* dialogs */
+let DLG_FNS=[];
+function dialog(title,body,actions){UI.dlg={title,body,actions:actions.map((a,k)=>({label:a.label,kind:a.kind||'',k}))};DLG_FNS=actions.map(a=>a.fn||null);render();setTimeout(()=>{const el=document.querySelector('.dialog input,.dialog textarea,.dialog .btn.primary');if(el)el.focus()},0)}
+A.dlgAct=k=>{const fn=DLG_FNS[k];if(fn){const r=fn();if(r===false)return}UI.dlg=null;commit()};
+
+/* ---------- views ---------- */
+const ICON={
+  releases:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 12l3-6h8l3 6v4H3z"/><path d="M3 12h14"/></svg>',
+  pages:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 2.5h7l3 3v12H5z"/></svg>',
+  comp:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="14" height="11" rx="1.5"/><path d="M7 5V3h6v2"/></svg>',
+  boardsettings:'',
+  issues:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M6.5 10l2.5 2.5 4.5-5"/></svg>',
+  setup:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="10" r="3"/><path d="M10 2v2.5M10 15.5V18M2 10h2.5M15.5 10H18M4.3 4.3l1.8 1.8M13.9 13.9l1.8 1.8M4.3 15.7l1.8-1.8M13.9 6.1l1.8-1.8"/></svg>',
+  team:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="3"/><circle cx="14.5" cy="8" r="2.3"/><path d="M1.8 17c.6-3 2.7-4.6 5.2-4.6s4.6 1.6 5.2 4.6M12.6 12.6c2.5-.4 4.8.9 5.6 4"/></svg>',
+  backlog:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 5h14M3 10h14M3 15h9"/></svg>',
+  board:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2.5" y="3" width="4" height="14" rx="1"/><rect x="8" y="3" width="4" height="9" rx="1"/><rect x="13.5" y="3" width="4" height="11" rx="1"/></svg>',
+  reports:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3v14h14"/><path d="M6 6l4 5 3-2 4 5"/></svg>',
+  retro:'<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 10a6 6 0 1 1-2-4.5"/><path d="M16 3v3.5h-3.5"/></svg>'
+};
+function render(){
+  const m=document.querySelector('.main');const sc=m?m.scrollTop:0;
+  const app=document.getElementById('app');
+  const sp=activeSprint();
+  app.innerHTML=`<div class="shell">
+    <header class="top">
+      <div class="brand"><span class="brand-mark"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 10a6 6 0 1 1-2-4.5"/><path d="M16 3v3.5h-3.5"/></svg></span>Scrum Simulator</div>
+      <span class="crumb">${S.site&&S.site.name?esc(S.site.name)+'.atlassian.net / ':''}Projects / ${S.project?esc(S.project.name):'New project'}</span>
+      <span class="spacer"></span>
+      ${sp?`<span class="daypill num">${esc(sp.name)} · Day ${sp.day} of ${sp.length}</span>`:''}
+      <button class="btn ghost" onclick="A.toggleHints()" aria-pressed="${S.hints!==false}">${S.hints!==false?'Hide hints':'Show hints'}</button>
+      <button class="btn ghost" onclick="A.toggleLesson()" aria-pressed="${S.lesson}">${S.lesson?'Hide lesson':'Show lesson'}</button>
+      <button class="btn" onclick="A.reset()">Reset</button>
+    </header>
+    <div class="body ${S.lesson?'':'nolesson'}">
+      <nav class="gstrip" aria-label="Global">
+        <button title="Search issues" aria-label="Search issues" onclick="A.go('issues')"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="5.5"/><path d="M13 13l4 4"/></svg></button>
+        <button title="Create issue" aria-label="Create issue" data-tour="global-create" onclick="S.project?A.openCreate('story'):toast('Create the project first.')"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 4v12M4 10h12"/></svg></button>
+        <span class="sp"></span>
+        <button title="Settings → User management" aria-label="User management" onclick="A.go('team')"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4"/></svg></button>
+        <button class="me" title="${S.site?esc(S.site.first+' '+S.site.last):'You'}">${S.site&&S.site.first?esc(initials(S.site.first+' '+S.site.last)):'?'}</button>
+      </nav>
+      <nav class="side" aria-label="Project">
+        ${S.project?`<div class="proj"><span class="proj-av">${esc(S.project.key.slice(0,2))}</span><div><b>${esc(S.project.name)}</b><small>Software project</small></div></div><div class="board-item">${ICON.board}<div>${esc(S.project.key)} board<small>Board</small></div></div>`:''}
+        ${navBtn('backlog','Backlog')}${navBtn('board','Active sprints')}${navBtn('reports','Reports')}
+        <hr>
+        ${navBtn('releases','Releases')}${navBtn('issues','Issues and filters')}<span class="nav dis">${ICON.pages}Pages</span><span class="nav dis">${ICON.comp}Components</span>${navBtn('setup','Project settings')}
+        <div class="navh">Course</div>
+        ${navBtn('team','Team &amp; users')}${navBtn('retro','Retrospective')}
+      </nav>
+      <main class="main">${S.project&&S.site&&S.site.template?`<div class="bc">Projects / ${esc(S.project.name)} / ${esc(S.project.key)} board</div>`:''}${view()}</main>
+      ${S.lesson?`<aside class="lesson" aria-label="Lesson">${lesson()}</aside>`:''}
+    </div>
+  </div>${UI.create?createHTML():''}${UI.modal&&byId(UI.modal)?modal(byId(UI.modal)):''}${UI.dlg?dlgHTML():''}`;
+  const m2=document.querySelector('.main');if(m2)m2.scrollTop=sc;
+  tour();
+}
+function navBtn(v,label){return `<button data-nav="${v}" class="nav ${S.view===v?'on':''}" onclick="A.go('${v}')" ${v!=='setup'&&!S.project?'disabled':''}>${ICON[v]}${label}</button>`}
+function view(){if(!S.project&&S.view!=='setup')S.view='setup';switch(S.view){case'setup':return setupView();case'team':return teamView();case'backlog':return backlogView();case'board':return boardView();case'reports':return reportsView();case'retro':return retroView();case'issues':return issuesView();case'boardsettings':return boardSettingsView();case'releases':return releasesView()}return''}
+
+function lesson(){const st=STAGES[S.stage];const checks=st.checks();
+  return `<div class="eyebrow">Lesson · step ${S.stage} of ${STAGES.length-1}</div>
+  <div class="steps">${STAGES.map((x,k)=>`<button class="step ${k===S.stage?'on':''} ${stageDone(k)?'ok':''}" onclick="A.stage(${k})"><span class="dot">${stageDone(k)?'✓':k}</span>${esc(x.t)}</button>`).join('')}</div>
+  <h2>${esc(st.t)}</h2>
+  <div class="lbody">${st.body}</div>
+  ${checks.length?`<div class="eyebrow" style="margin-top:14px">Your tasks</div><div class="tasks">${checks.map((c,k)=>`<div class="task ${c[1]?'ok':''}"><span class="box">${c[1]?'✓':`<span class="tnum">${k+1}</span>`}</span><span>${c[0]}</span></div>`).join('')}</div>`:''}
+  <div class="tip"><b>In real Jira</b>${st.tip}</div>${st.video?`<div class="tip" style="margin-top:8px;border-left-color:var(--accent)"><b style="color:var(--accent)">In the videos</b>${st.video}</div>`:''}
+  <div class="lnav">
+    ${S.stage>0?`<button class="btn" onclick="A.stage(${S.stage-1})">Back</button>`:''}
+    ${S.stage<STAGES.length-1?`<button class="btn primary" data-tour="next-stage" onclick="A.stage(${S.stage+1})">${S.stage===0?'Start':'Next step'}</button>`:''}
+    ${st.fill?`<button class="btn ghost" onclick="A.fill('${st.fill}')" title="For demos: fills this step with example data">Fill with sample data</button>`:''}
+  </div>`}
+
+const TEAMS=['Customer Service','Finance','Operations','IT Support','Sales','Legal','Software Development','Marketing','Human Resources','Other'];
+const JOBS=['DevOps','Software Engineer','Web Developer','QA Engineer','Project Manager','Designer','QA Manager','Development Manager','Product Manager','Other'];
+const TPLS={scrum:['Scrum','Plan and track stories, tasks and workflows for a Scrum team. For teams that deliver work on a regular schedule.'],kanban:['Kanban','Move issues across a board and limit work in progress. For teams that pull work continuously from a backlog.'],bug:['Bug tracking','Keep a list of development tasks and bugs. For teams that don\'t need a board.']};
+A.onb=k=>{S.onb=k;commit()};
+A.signup=()=>{const em=val('su-email').trim(),f=val('su-first').trim(),l=val('su-last').trim(),site=val('su-site').trim().toLowerCase().replace(/[^a-z0-9-]/g,'');if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){toast('Enter a valid email address.');return}if(!f||!l){toast('Enter your first and last name.');return}if(site.length<3){toast('Choose a site name of at least 3 letters, e.g. vangelisautoshow.');return}S.site=Object.assign(S.site||{},{email:em,first:f,last:l,name:site});const full=f+' '+l;if(!S.team.some(m=>m.name===full))S.team.push({id:uid(),name:full,role:'Scrum Master'});S.onb=1;toast(`Your site ${site}.atlassian.net is ready. You are its admin.`);commit()};
+A.pickTeam=t=>{S.site.team=t;S.onb=2;commit()};
+A.pickJob=j=>{if(j==='Other'){UI.otherJob=true;render();setTimeout(()=>{const e=document.getElementById('su-other');if(e)e.focus()},0);return}S.site.role=j;UI.otherJob=false;S.onb=3;commit()};
+A.otherJob=()=>{const v=val('su-other').trim();if(!v){toast('Type your role, e.g. Scrum Master.');return}A.pickJob(v)};
+const nameFromEmail=e=>e.split('@')[0].split(/[._-]+/).filter(w=>/^[a-z]+$/i.test(w)&&w.toLowerCase()!=='vangelis').slice(0,2).map(w=>w[0].toUpperCase()+w.slice(1).toLowerCase()).join(' ')||e.split('@')[0];
+A.invite=skip=>{let n=0;if(!skip){[1,2,3].forEach(k=>{const e=val('su-inv'+k).trim();if(!e)return;if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){return}const name=nameFromEmail(e);if(!S.team.some(m=>m.name===name)){S.team.push({id:uid(),name,role:'Developer',email:e});n++}})}S.site.inviteDone=true;S.onb=4;if(n)toast(`${n} invitation${n>1?'s':''} sent. They appear on the Team page, where you assign Scrum roles.`);commit()};
+A.setQ=(f,v)=>{S.site[f]=v;commit()};
+A.pickTplOnb=t=>{if(t!=='scrum'){UI.onbWarn=t;render();return}S.site.template='scrum';UI.tpl='scrum';UI.onbWarn=null;toast('Scrum template selected. Now name your project.');commit()};
+function recommend(x){if(x.work==='bugs')return['bug','your team mostly works on bugs'];if(x.schedule==='tight')return['scrum','you deliver on a tight, regular schedule'];return['kanban','your schedule is flexible and work arrives continuously']}
+function onbView(){const x=S.site||{};const k=S.onb||0;const lab=['Account','About you','About you','Your team','Set up','Set up'];
+  const steps=['Account','About you','Your team','Set up'];const cur=[0,1,1,2,3,3][k];
+  const head=`<div class="onb-steps">${steps.map((t,n)=>`<span class="${n===cur?'on':''} ${n<cur?'ok':''}"><i>${n<cur?'✓':n+1}</i>${t}</span>`).join('')}</div>`;
+  let body='';
+  if(k===0)body=`<div class="onb card onb-acc"><div class="onb-side"><h2>Jira Software</h2><p class="muted">Cloud · free trial</p><ul><li>Full access to all features</li><li>No credit card needed</li><li>Invite your whole team</li></ul><p class="muted" style="font-size:13px">This is a practice copy of the real sign-up page. Nothing is sent anywhere.</p></div>
+    <div class="stack"><h2>Create your account</h2>
+      <label class="f" for="su-email">Email<input id="su-email" type="text" inputmode="email" placeholder="you@company.com" value="${esc(x.email||'')}"></label>
+      <div class="row-flex" style="flex-wrap:nowrap"><label class="f" for="su-first" style="flex:1">First name<input id="su-first" placeholder="Nick" value="${esc(x.first||'')}"></label><label class="f" for="su-last" style="flex:1">Last name<input id="su-last" placeholder="Stekovic" value="${esc(x.last||'')}"></label></div>
+      <label class="f" for="su-site">Site name <span class="hint">Your team's web address. Every project lives here.</span><span class="site-in"><input id="su-site" placeholder="vangelisautoshow" value="${esc(x.name||'')}"><span>.atlassian.net</span></span></label>
+      <button class="btn primary" data-tour="su-next0" onclick="A.signup()">Agree and sign up</button></div></div>`;
+  if(k===1)body=`<div class="onb card stack"><h2>Welcome to Jira Software, ${esc(x.first)}!</h2><p class="muted">A few quick questions help Jira personalise your experience.</p>
+    <div class="onb-q"><b>What type of team do you work in?</b><div class="chips">${TEAMS.map(t=>`<button class="chip ${x.team===t?'on':''}" onclick="A.pickTeam('${t}')">${t}</button>`).join('')}</div><button class="link" data-tour="su-next1" onclick="A.pickTeam('Skipped')">Skip question</button></div></div>`;
+  if(k===2)body=`<div class="onb card stack"><h2>Welcome to Jira Software, ${esc(x.first)}!</h2><p class="muted">This appears in your profile.</p>
+    <div class="onb-q"><b>Which of these best describes what you do?</b><div class="chips">${JOBS.map(t=>`<button class="chip ${x.role===t?'on':''}" onclick="A.pickJob('${t}')">${t}</button>`).join('')}</div>
+    ${UI.otherJob?`<div class="row-flex" style="flex-wrap:nowrap;margin-top:10px"><input id="su-other" placeholder="e.g. Scrum Master" onkeydown="if(event.key==='Enter')A.otherJob()" aria-label="Your role"><button class="btn sm" onclick="A.otherJob()">Save</button></div>`:''}
+    <button class="link" data-tour="su-next1" onclick="A.onb(1)">Back</button></div></div>`;
+  if(k===3)body=`<div class="onb card stack"><h2>Invite your team</h2><p class="muted">Great projects need great teams. Add teammates to plan, track and release together. They'll appear on the Team page.</p>
+    ${[1,2,3].map(n=>`<input id="su-inv${n}" type="email" placeholder="Enter their email address" aria-label="Teammate ${n} email">`).join('')}
+    <label class="row-flex" style="font-size:14px;flex-wrap:nowrap"><input type="checkbox" checked style="width:auto"> Let anyone with a verified ${esc((x.email||'@company.com').split('@')[1]||'company.com')} email join your Jira site</label>
+    <div class="row-flex" style="justify-content:flex-end"><button class="btn ghost" onclick="A.invite(true)">Skip</button><button class="btn primary" data-tour="su-next3" onclick="A.invite(false)">Next</button></div></div>`;
+  if(k===4){const sel=(f,opts)=>`<select class="${x[f]?'':'unset'}" style="width:auto;display:inline-block" onchange="A.setQ('${f}',this.value)" aria-label="${f}"><option value="" ${x[f]?'':'selected'}>choose</option>${opts.map(o=>`<option ${x[f]===o?'selected':''}>${o}</option>`).join('')}</select>`;const ok=x.newJira&&x.newAgile&&x.work&&x.schedule;
+    body=`<div class="onb card stack"><h2>Help us set up your Jira</h2><p class="muted">Answer a few questions and Jira suggests the project type that suits your team.</p>
+    <div class="qs"><p>I am ${sel('newJira',['new to','experienced with'])} Jira.</p><p>My team is ${sel('newAgile',['new to','experienced with'])} agile methodologies.</p><p>We spend our time working on ${sel('work',['features','bugs','both features and bugs'])}.</p><p>We have a ${sel('schedule',['tight','flexible'])} schedule to finish our work.</p></div>
+    <div class="row-flex" style="justify-content:flex-end"><button class="btn ghost" onclick="A.onb(5)">Skip</button><button class="btn primary" data-tour="su-next4" onclick="A.onb(5)" ${ok?'':'disabled'}>Next</button></div></div>`}
+  if(k===5){const [rec,why]=recommend(x);body=`<div class="stack"><div><h2>Jira recommends ${TPLS[rec][0]}</h2><p class="muted" style="margin-top:4px">Because ${why}. You can pick any template; this course uses Scrum.</p></div>
+    ${UI.onbWarn?`<div class="note-warn">${TPLS[UI.onbWarn][0]} doesn't use sprints, so it won't work for this course. Choose Scrum.</div>`:''}
+    <div class="tpl">${Object.entries(TPLS).map(([key,[t,d]])=>`<div class="tplc ${rec===key?'on':''}"><b>${t}${rec===key?' <span class="loz active">Recommended</span>':''}</b><small>${d}</small><div><button class="btn ${key==='scrum'?'primary':''} sm" ${key==='scrum'?'data-tour="su-scrum"':''} onclick="A.pickTplOnb('${key}')">Select</button></div></div>`).join('')}</div>
+    <div><button class="link" onclick="A.onb(4)">Back to the questions</button></div></div>`}
+  return `<div class="head"><div><h1>Sign up for Jira</h1><p>Create the site your team's projects will live in, the same way JiraTutorial1 starts.</p></div></div>${head}${body}`}
+function setupView(){
+  if(!S.site||!S.site.template)return onbView();
+  if(!S.project){return `<div class="head"><div><h1>Create a project</h1><p>Choose a template, then name your project. The template decides which features the project gets.</p></div></div>
+  <div class="stack">
+    <div class="tpl">
+      <button class="tplc ${UI.tpl==='scrum'?'on':''}" onclick="A.pickTpl('scrum')"><b>Scrum</b><small>Plan work in fixed-length sprints. Includes a backlog, sprint planning, a sprint board, burndown and velocity reports.</small></button>
+      <button class="tplc ${UI.tpl==='kanban'?'on':''}" onclick="A.pickTpl('kanban')"><b>Kanban</b><small>Continuous flow with work-in-progress limits. No sprints. Suits support and operations teams.</small></button>
+    </div>
+    ${UI.tpl==='kanban'?'<div class="note-warn">Kanban projects have no sprints. This course practises Scrum, so pick the Scrum template.</div>':''}
+    <div class="card stack" style="max-width:640px">
+      <label class="f" for="pj-name">Project name<input id="pj-name" placeholder="e.g. Vangelis Auto Show" oninput="A.keyFromName(this.value)"></label>
+      <label class="f" for="pj-key">Key <span class="hint">2–5 letters. Every issue gets this prefix: VAS-1, VAS-2…</span><input id="pj-key" placeholder="VAS" maxlength="5" oninput="this.dataset.touched=1"></label>
+      <div class="f" style="font-size:13px;font-weight:600;color:var(--muted)">Project type</div>
+      <label class="radio"><input type="radio" name="mg" ${UI.mgmt==='team'?'checked':''} onchange="A.pickMgmt('team')"><span><b>Team-managed</b><br><span class="muted">The team sets up its own workflow and fields. Simple to start; good for one team.</span></span></label>
+      <label class="radio"><input type="radio" name="mg" ${UI.mgmt==='company'?'checked':''} onchange="A.pickMgmt('company')"><span><b>Company-managed</b><br><span class="muted">A Jira admin controls shared workflows across many projects. Used in larger organisations.</span></span></label>
+      <div class="row-flex"><button class="btn primary" data-tour="create-project" onclick="A.createProject()">Create project</button></div>
+    </div>
+  </div>`}
+  const p=S.project;
+  return `<div class="head"><div><h1>Project settings</h1><p>How ${esc(p.name)} is set up. In Jira, these screens live under Project settings.</p></div></div>
+  <div class="grid2">
+    <div class="card stack"><h2>Details</h2>
+      <label class="f" for="ps-name">Name<input id="ps-name" value="${esc(p.name)}" onchange="A.renameProject(this.value)"></label>
+      <div class="row-flex"><span class="muted">Key</span><b>${esc(p.key)}</b><span class="muted" style="margin-left:14px">Template</span><b>Scrum</b><span class="muted" style="margin-left:14px">Type</span><b>${p.mgmt==='team'?'Team-managed':'Company-managed'}</b></div>
+      <p class="muted" style="margin:0">The key can't easily change later, because every issue number uses it.</p>
+    </div>
+    <div class="card stack"><h2>Issue types</h2>
+      <div class="hier">
+        <div>${ti('epic')}<b>Epic</b><span class="muted">a large goal, e.g. "Audio System"</span></div>
+        <div style="padding-left:22px">${ti('story')}<b>Story</b><span class="muted">user value, fits in a sprint</span></div>
+        <div style="padding-left:22px">${ti('task')}<b>Task</b><span class="muted">technical work</span></div>
+        <div style="padding-left:22px">${ti('bug')}<b>Bug</b><span class="muted">something broken</span></div>
+        <div style="padding-left:44px"><span class="ti" style="background:var(--muted)"></span><b>Sub-task</b><span class="muted">a step inside one issue</span></div>
+      </div>
+    </div>
+    <div class="card stack"><h2>Board settings</h2>
+      <p class="muted" style="margin:0">Columns, quick filters, estimation and working days for the ${esc(S.project.key)} board. In Jira: board ⋯ → Board settings.</p>
+      <div class="flow">${S.columns.map((c,n)=>`<span class="loz ${stCls(c.statuses[0]||'')}" style="font-size:12px;padding:3px 8px">${esc(c.name)}</span>${n<S.columns.length-1?'<span class="arrow">→</span>':''}`).join('')}</div>
+      <div><button class="btn primary" data-tour="board-settings" onclick="A.go('boardsettings')">Open board settings</button></div>
+    </div>
+    <div class="card stack"><h2>Releases</h2><p class="muted" style="margin:0">${S.releases.length?S.releases.map(r=>esc(r.name)).join(', '):'No versions yet.'}</p><div><button class="btn" onclick="A.go('releases')">Open Releases</button></div></div>
+  </div>`}
+
+A.bsTab=t=>{UI.bsTab=t;if(t==='qf'||t==='columns')UI.colErr=UI.qfErr=null;render()};
+A.addCol=()=>{const raw=val('col-name').trim();if(!raw)return;const norm=x=>x.toLowerCase().replace(/s$/,'').trim();const m=ST.find(([k,l])=>norm(l)===norm(raw));if(!m){UI.colErr=`"${raw}" isn't one of the team's agreed columns. The working agreement lists: ${NINE.join(', ')}.`;render();return}if(S.columns.some(c=>c.name.toLowerCase()===m[1].toLowerCase())){UI.colErr=`There is already a ${m[1]} column.`;render();return}S.columns.forEach(c=>c.statuses=c.statuses.filter(x=>x!==m[0]));S.columns.push({name:m[1],statuses:[m[0]]});UI.colErr=null;commit();setTimeout(()=>{const e=document.getElementById('col-name');if(e)e.focus()},0)};
+A.delCol=k=>{S.columns.splice(k,1);commit()};
+A.moveCol=(k,d)=>{const j=k+d;if(j<0||j>=S.columns.length)return;const t=S.columns[k];S.columns[k]=S.columns[j];S.columns[j]=t;commit()};
+A.setEst=v=>{S.estimation=v;if(v!=='Story Points')toast('This course estimates in Story Points. Jira would now total a different statistic.');commit()};
+A.togDay=d=>{const w=S.workdays;const k=w.indexOf(d);if(k>=0)w.splice(k,1);else{w.push(d);w.sort()}commit()};
+function boardSettingsView(){const t=UI.bsTab||'columns';const tabs=[['general','General',0],['columns','Columns',1],['swimlanes','Swimlanes',0],['qf','Quick Filters',1],['cardcolors','Card colors',0],['cardlayout','Card layout',0],['estimation','Estimation',1],['workdays','Working days',1],['detail','Issue Detail View',0]];
+  let body='';
+  if(t==='columns'){const um=unmapped();body=`<h2>Column management</h2><p class="muted">Columns can be added, removed, reordered and renamed. Each column is mapped to a status, and issues move left to right as the work progresses. Replace the default columns with the 9 from the team's working agreement, in order.</p>
+    ${columnsDone()?'<div class="note-ok">All 9 columns are set up in the right order.</div>':''}
+    <div class="cm">${S.columns.map((c,k)=>`<div class="cm-col" ${c.dflt?'data-default="1"':''}><div class="cm-h"><b>${esc(c.name)}</b><button class="btn ghost sm" data-tour="col-del" onclick="A.delCol(${k})" aria-label="Delete column ${esc(c.name)}" title="Delete column">✕</button></div><div class="cm-st">${c.statuses.map(x=>`<span class="loz ${stCls(x)}">${statusLabel(x)}</span>`).join('')||'<span class="muted">No status</span>'}</div><div class="cm-mv"><button class="btn ghost sm" onclick="A.moveCol(${k},-1)" ${k?'':'disabled'} aria-label="Move left">←</button><button class="btn ghost sm" onclick="A.moveCol(${k},1)" ${k<S.columns.length-1?'':'disabled'} aria-label="Move right">→</button></div></div>`).join('')}
+      <div class="cm-col unm"><div class="cm-h"><b>Unmapped statuses</b></div><div class="cm-st">${um.map(x=>`<span class="loz">${statusLabel(x)}</span>`).join('')||'<span class="muted">None</span>'}</div><div class="muted" style="font-size:12px">Issues here don't show on the board.</div></div></div>
+    <div class="row-flex" style="flex-wrap:nowrap;max-width:520px"><input id="col-name" placeholder="Column name, e.g. ${esc((NINE.find(n=>!S.columns.some(c=>c.name===n))||'Backlog'))}" onkeydown="if(event.key==='Enter')A.addCol()" aria-label="New column name"><button class="btn" data-tour="col-add" onclick="A.addCol()">Add column</button></div>
+    ${UI.colErr?`<div class="note-bad">${esc(UI.colErr)}</div>`:''}
+    <h3 style="margin-top:18px">From the Agile working team agreement</h3>
+    <div style="overflow-x:auto"><table><thead><tr><th>Column</th><th>What it means</th></tr></thead><tbody>${ST.map(([k,l])=>`<tr><td style="white-space:nowrap"><b>${l}</b></td><td>${esc(ST_DEF[k])}</td></tr>`).join('')}</tbody></table></div>`}
+  else if(t==='qf'){body=`<h2>Quick Filters</h2><p class="muted">Quick Filters can be used to further filter the issues in the board based on the additional JQL query. Make one per team member, e.g. <code>assignee = "Sandra Price"</code>. The person must be invited to the site first.</p>
+    <div style="overflow-x:auto"><table><thead><tr><th>Name</th><th>JQL</th><th>Description</th><th></th></tr></thead><tbody>
+    <tr><td><input id="qf-name" placeholder="Sandra Price" aria-label="Quick filter name"></td><td><input id="qf-jql" placeholder='assignee = "Sandra Price"' aria-label="JQL" onkeydown="if(event.key==='Enter')A.addQF()"></td><td><input id="qf-desc" placeholder="All tasks for Sandra Price" aria-label="Description"></td><td><button class="btn sm" onclick="A.addQF()">Add</button></td></tr>
+    ${S.qfs.map(q=>`<tr><td>${esc(q.name)}</td><td><code>${esc(q.jql)}</code></td><td>${esc(q.desc)}</td><td><button class="btn ghost sm danger" onclick="A.delQF('${q.id}')">Delete</button></td></tr>`).join('')}
+    </tbody></table></div>${UI.qfErr?`<div class="note-bad">${esc(UI.qfErr)}</div>`:''}`}
+  else if(t==='estimation'){body=`<h2>Estimation</h2><p class="muted">The estimation statistic is what the team estimates with, and what the burndown and velocity charts count.</p><label class="f" style="max-width:300px">Estimation statistic<select onchange="A.setEst(this.value)">${['Story Points','Original Time Estimate','Issue Count'].map(o=>`<option ${S.estimation===o?'selected':''}>${o}</option>`).join('')}</select></label><p class="muted">Make sure it's set to <b>Story Points</b>, as in JiraTutorial1.</p>`}
+  else if(t==='workdays'){const D=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];body=`<h2>Working days</h2><p class="muted">Days the team works. Non-working days are left out of the sprint's days remaining and the burndown. Monday to Friday is standard.</p><div class="stack" style="gap:6px">${[1,2,3,4,5,6,0].map(d=>`<label class="row-flex" style="flex-wrap:nowrap"><input type="checkbox" style="width:auto" ${S.workdays.includes(d)?'checked':''} onchange="A.togDay(${d})">${D[d]}</label>`).join('')}</div><p class="muted">Non-working days: add holidays such as the holiday shut-down period in the release plan.</p>`}
+  return `<div class="head"><div><h1>Settings for ${esc(S.project.key)} board</h1></div><button class="btn" onclick="A.go(activeSprint()?'board':'backlog')">← Back to board</button></div>
+  <div class="bs"><nav class="bs-nav" aria-label="Board settings">${tabs.map(([k,l,on])=>on?`<button class="${t===k?'on':''}" data-tour="bs-${k}" onclick="A.bsTab('${k}')">${l}</button>`:`<span title="Not part of this course">${l}</span>`).join('')}</nav><div class="card stack">${body}</div></div>`}
+A.openVersion=()=>dialog('Create version',`<label class="f">Name<input id="rl-name" placeholder="e.g. Release 1"></label><div class="row-flex" style="flex-wrap:nowrap"><label class="f" style="flex:1">Start date<input id="rl-start" type="date"></label><label class="f" style="flex:1">Release date<input id="rl-end" type="date"></label></div><label class="f">Description<input id="rl-desc" placeholder="e.g. Get In bare bones"></label>`,[{label:'Cancel'},{label:'Save',kind:'primary',fn:()=>{const v=val('rl-name').trim();if(!v){toast('Give the version a name.');return false}if(S.releases.some(r=>r.name.toLowerCase()===v.toLowerCase())){toast('A version with that name exists.');return false}S.releases.push({name:v,start:val('rl-start'),end:val('rl-end'),desc:val('rl-desc').trim()});toast(`Version ${v} created.`)}}]);
+function releasesView(){return `<div class="head"><div><h1>Releases</h1><p>Versions group the issues that ship together. The release plan: 20 two-week sprints and two releases. Release 1 is the bare-bones Get In app (architecture, navigation, main screen, screen saver, test drive, share, subscribe, audio system). Release 2 is the MVP with every feature.</p></div><button class="btn primary" data-tour="create-version" onclick="A.openVersion()">Create version</button></div>
+  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Version</th><th>Status</th><th style="width:200px">Progress</th><th>Start date</th><th>Release date</th><th>Description</th><th></th></tr></thead><tbody>
+  ${S.releases.map((r,k)=>{const its=S.issues.filter(i=>i.fix===r.name);const d=its.filter(i=>i.status==='done').length;return `<tr><td><b>${esc(r.name)}</b></td><td><span class="loz">Unreleased</span></td><td><span class="bar" style="display:block"><i style="width:${its.length?Math.round(100*d/its.length):0}%"></i></span><span class="muted" style="font-size:12px">${d} of ${its.length} issues done</span></td><td>${esc(fmtD(r.start))}</td><td>${esc(fmtD(r.end))}</td><td>${esc(r.desc)}</td><td><button class="btn ghost sm" onclick="A.delRelease(${k})" aria-label="Delete">✕</button></td></tr>`}).join('')||'<tr><td colspan="7" class="muted">No versions yet. Create Release 1 (1 Jul 2019 – 4 Oct 2019) and Release 2 - MVP (7 Oct 2019 – 10 Apr 2020).</td></tr>'}
+  </tbody></table></div>`}
+function teamView(){
+  const roleCard=(cls,title,txt)=>`<div class="card role-card ${cls}"><h3>${title}</h3><p class="muted" style="margin:6px 0 0">${txt}</p></div>`;
+  return `<div class="head"><div><h1>Team</h1><p>Who works on ${esc(S.project.name)}. A person must be invited to the site before you can assign them work or make a quick filter for them. Job title is what they do; Scrum role is their accountability in Scrum.</p></div><button class="btn" onclick="A.fill('team')">Add sample team</button></div>
+  <div class="grid2" style="margin-bottom:16px">
+    ${roleCard('po','Product Owner','Owns and orders the product backlog. Decides what gets built next to maximise value. One person, not a committee.')}
+    ${roleCard('sm','Scrum Master','Coaches the team in Scrum, runs the events well and removes impediments. Not the team\'s boss.')}
+    ${roleCard('dev','Developers','Everyone who builds the product: programmers, testers, designers. They plan the sprint and decide how to do the work.')}
+  </div>
+  <div class="card">
+    <table><thead><tr><th style="width:44px"></th><th>Name</th><th>Job title</th><th style="width:200px">Scrum role</th><th style="width:80px"></th></tr></thead><tbody>
+    ${S.team.map(m=>`<tr><td>${av(m)}</td><td>${esc(m.name)}</td><td><input aria-label="Job title for ${esc(m.name)}" value="${esc(m.title||'')}" placeholder="e.g. Business Analyst" onchange="A.setTitle('${m.id}',this.value)"></td><td><select aria-label="Role for ${esc(m.name)}" onchange="A.setRole('${m.id}',this.value)">${ROLES.map(r=>`<option ${r===m.role?'selected':''}>${r}</option>`).join('')}</select></td><td><button class="btn ghost sm danger" onclick="A.removeMember('${m.id}')">Remove</button></td></tr>`).join('')||`<tr><td colspan="5" class="muted">No one on the team yet.</td></tr>`}
+    </tbody></table>
+    <div class="row-flex" style="margin-top:12px">
+      <input id="tm-name" placeholder="Full name" style="flex:1;min-width:180px" onkeydown="if(event.key==='Enter')A.addMember()" aria-label="New member name">
+      <input id="tm-title" placeholder="Job title" style="width:170px" aria-label="New member job title">
+      <select id="tm-role" style="width:170px" aria-label="New member role">${ROLES.map(r=>`<option ${r==='Developer'?'selected':''}>${r}</option>`).join('')}</select>
+      <button class="btn primary" onclick="A.addMember()">Invite user</button>
+    </div>
+  </div>`}
+
+function irow(i){const sp=i.sprint?sprintOf(i.sprint):null;const e=UI.estimate&&!(sp&&sp.state==='closed')&&i.type!=='task';
+  return `<div class="irow ${i.status==='done'?'done':''}" data-type="${i.type}" ${i.type==='story'&&!i.epic?'data-noepic="1"':''} draggable="true" ondragstart="A.dragStart(event,'${i.id}')" ondragover="A.over(event)" ondragleave="A.leave(event)" ondrop="A.dropRow(event,'${i.id}')" onclick="A.open('${i.id}')">
+    <span class="grip" aria-hidden="true">⋮⋮</span>${ti(i.type)}<span class="sum" title="${esc(i.summary)}">${esc(i.summary)}</span>
+    ${i.blocked?'<span class="flag" title="Blocked">Blocked</span>':''}${i.fix?`<span class="fixv">${esc(i.fix)}</span>`:''}${epicTag(i.epic)}${sp?`<span class="loz ${stCls(i.status)}">${statusLabel(i.status)}</span>`:''}<span class="key">${i.key}</span>${prio(i.prio)}
+    ${e?`<span class="fibrow" onclick="event.stopPropagation()">${FIB.slice(0,6).map(v=>`<button class="fib ${i.points===v?'on':''}" onclick="A.quickPts(event,'${i.id}',${v})">${v}</button>`).join('')}</span>`:ptsChip(i)}
+    ${av(member(i.assignee))}</div>`}
+function backlogView(){
+  const f=forecast();const fe=S.filterEpic;const filt=list=>fe?list.filter(i=>i.epic===fe):list;
+  const open=S.sprints.filter(s=>s.state!=='closed');
+  const sec=sp=>{const items=sprintIssues(sp.id);const total=sum(items);const pct=Math.min(100,Math.round(100*total/Math.max(1,f.val)));const cls=total>f.val?'over':(pct>=90?'near':'');
+    return `<section class="section" ondragover="A.over(event)" ondragleave="A.leave(event)" ondrop="A.dropSection(event,'${sp.id}')">
+      <div class="sec-h"><h3>${esc(sp.name)}</h3><span class="loz ${sp.state}">${sp.state==='active'?'Active':'Not started'}</span><span class="muted num">${sp.start?esc(fmtD(sp.start))+' – '+esc(fmtD(addDays(sp.start,(sp.weeks||2)*7))):''}</span>
+        <span class="muted num">${items.length} issues · ${total} pts</span>
+        ${sp.state==='future'?`<span class="cap" title="Forecast: ${f.why}"><span class="bar"><i class="${cls}" style="width:${pct}%"></i></span><span class="num">${total} / ${f.val} pts</span></span>`:''}
+        <span style="flex:1"></span>
+        ${sp.state==='future'?`<button class="btn primary sm" data-tour="start-sprint" onclick="A.askStart('${sp.id}')">Start sprint</button><button class="btn ghost sm" onclick="A.editSprint('${sp.id}')">Edit</button><button class="btn ghost sm" onclick="A.delSprint('${sp.id}')">Delete</button>`:`<button class="btn sm" onclick="A.go('board')">Open board</button><button class="btn primary sm" data-tour="complete" onclick="A.askComplete()">Complete sprint</button>`}
+      </div>
+      ${sp.goal?`<div class="sec-goal"><b>Sprint goal:</b> ${esc(sp.goal)}</div>`:''}
+      ${filt(items).map(irow).join('')||`<div class="dropzone-empty">Plan your sprint: drag issues here from the Backlog.</div>`}
+      <div class="sec-foot"><span>${items.length} issues</span><span>Estimate <b class="num">${total}</b></span></div>
+    </section>`};
+  const bl=backlogIssues();
+  return `<div class="head"><div><h1>Backlog</h1><p>The backlog is your team's to-do list, ranked in order of priority. Drag to rank issues or to move them into a sprint. Click an issue to open it.</p></div>
+    <div class="row-flex"><button class="btn primary" data-tour="create-issue" onclick="A.openCreate('story')">Create issue</button><button class="btn ${UI.estimate?'primary':''}" data-tour="estimate" onclick="A.toggleEstimate()">${UI.estimate?'Done estimating':'Quick estimate'}</button><button class="btn" data-tour="create-sprint" onclick="A.createSprint()">Create sprint</button></div></div>
+  <div class="bl">
+    <aside class="epics"><div class="row-flex" style="justify-content:space-between;margin-bottom:8px"><h3>Epics</h3>${fe?`<button class="btn ghost sm" onclick="A.filterEpic('${fe}')">Show all</button>`:''}</div><div class="epic-scroll">
+      ${S.epics.map(e=>{const its=S.issues.filter(i=>i.epic===e.id);const d=its.filter(i=>i.status==='done').length;return `<button class="epic-item ${fe===e.id?'on':''}" title="${esc(e.summary||'')}" onclick="A.filterEpic('${e.id}')"><span class="row-flex">${ti('epic')}<b style="color:${e.color}">${esc(e.name)}</b></span><span class="muted" style="font-size:12px">${e.key} · ${its.length} issues · ${d} done</span><span class="bar"><i style="width:${its.length?Math.round(100*d/its.length):0}%"></i></span></button>`}).join('')||'<p class="muted" style="font-size:14px">No epics yet. Epics group related stories.</p>'}</div>
+      <button class="btn sm" data-tour="create-epic" onclick="A.openCreate('epic')">+ Create epic</button>
+    </aside>
+    <div>
+      ${open.map(sec).join('')}
+      <section class="section" data-sec="backlog" ondragover="A.over(event)" ondragleave="A.leave(event)" ondrop="A.dropSection(event,'backlog')">
+        <div class="sec-h"><h3>Backlog</h3><span class="muted num">${bl.length} issues · ${sum(bl)} pts · ${bl.filter(i=>!i.points&&i.type!=='task').length} not estimated</span><span style="flex:1"></span>${S.issues.length<4?`<button class="btn sm" onclick="A.fill('backlog')">Load sample backlog</button>`:''}</div>
+        ${filt(bl).map(irow).join('')||`<div class="dropzone-empty">${fe?'No backlog issues in this epic.':'The backlog is empty. Create the first story below.'}</div>`}
+        <div class="create-row"><select id="ni-type" aria-label="Issue type">${['story','task','bug'].map(t=>`<option value="${t}" ${(UI.newType||'story')===t?'selected':''}>${TYPE_LABEL[t]}</option>`).join('')}</select><input id="ni-sum" placeholder="As a Neo vehicle enthusiast, I would like … so that …" onkeydown="if(event.key==='Enter')A.createIssue()" aria-label="New issue summary"><button class="btn primary" onclick="A.createIssue()">Create</button></div>
+      </section>
+    </div>
+  </div>`}
+
+function burnChart(sp,W,H){const len=sp.length;const pad={l:34,r:12,t:12,b:26};const iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;
+  const data=[];for(let d=0;d<=sp.day;d++){data.push(sp.burn[d]!=null?sp.burn[d]:(data[d-1]??sp.committed))}
+  if(sp.state==='active')data[sp.day]=remaining(sp);
+  const ymax=Math.max(1,sp.committed+(sp.scopeAdded||0),...data);const step=ymax>40?10:(ymax>16?5:(ymax>8?2:1));const top=Math.ceil(ymax/step)*step;
+  const x=d=>pad.l+iw*d/len,y=v=>pad.t+ih*(1-v/top);
+  let g='';for(let v=0;v<=top;v+=step)g+=`<line class="grid" x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${pad.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  const xs=len>5?[0,2,4,6,8,10]:[0,1,2,3,4,5];xs.forEach(d=>{if(d<=len)g+=`<text x="${x(d)}" y="${H-8}" text-anchor="middle">${d===0?'Day 0':d}</text>`});
+  const pts=data.map((v,d)=>`${x(d)},${y(v)}`).join(' ');
+  const area=data.length>1?`<polygon class="area" points="${x(0)},${y(0)} ${pts} ${x(data.length-1)},${y(0)}"/>`:'';
+  const scope=(sp.changes||[]).filter(c=>c.delta>0).map(c=>`<line class="scope" x1="${x(c.day)}" x2="${x(c.day)}" y1="${pad.t}" y2="${pad.t+ih}" stroke-dasharray="2 3"/>`).join('');
+  const last=data.length-1;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Burndown: ${data[last]} of ${sp.committed} points remaining on day ${sp.day}">${g}${scope}<line class="ideal" x1="${x(0)}" y1="${y(sp.committed)}" x2="${x(len)}" y2="${y(0)}"/>${area}<polyline class="actual" points="${pts}"/><circle class="dot" cx="${x(last)}" cy="${y(data[last])}" r="4.5"/></svg>`}
+A.qf=id=>{UI.qf=UI.qf===id?null:id;if(UI.qf)S.flags.qfUsed=true;commit()};
+function qfFilter(q,sp){if(!q)return()=>true;if(q.builtin==='me'){const me=S.site&&S.team.find(t=>t.name===S.site.first+' '+S.site.last);return i=>!!me&&i.assignee===me.id}if(q.builtin==='recent')return i=>i.updDay!=null&&i.updDay>=sp.day-1;return i=>i.assignee===q.member}
+function boardView(){const sp=activeSprint();
+  if(!sp)return `<div class="head"><div><h1>Active sprints</h1></div><button class="btn ghost" data-tour="board-settings" onclick="A.go('boardsettings')" title="Board settings">⋯ Board settings</button></div><div class="empty"><h2>There are no active sprints</h2><p>Start a sprint in the Backlog. Its issues then appear here.</p><button class="btn primary" onclick="A.go('backlog')">Go to Backlog</button></div>`;
+  const all=sprintIssues(sp.id);const qf=S.qfs.find(q=>q.id===UI.qf);const items=all.filter(qfFilter(qf,sp));const rem=remaining(sp);
+  const hidden=all.filter(i=>unmapped().includes(i.status)).length;
+  const col=(c,k)=>{const cs=items.filter(i=>c.statuses.includes(i.status));return `<div class="col c-${c.statuses[0]||'none'}" ondragover="A.over(event)" ondragleave="A.leave(event)" ondrop="A.dropCol(event,${k})"><div class="col-h"><span>${esc(c.name)}</span><span class="num">${cs.length}</span></div>${c.statuses.length===1?`<div class="col-def">${esc(ST_DEF[c.statuses[0]])}</div>`:''}${cs.map(bcard).join('')}</div>`};
+  const su=sp.standup;const left=sp.length-sp.day;
+  return `<div class="head"><div><h1>${esc(sp.name)}</h1><p>${esc(sp.goal)}</p></div><div class="row-flex"><span class="muted num" title="Working days left">⏱ ${left} day${left===1?'':'s'} remaining</span><button class="btn" data-tour="complete" onclick="A.askComplete()">Complete sprint</button><button class="btn ghost" data-tour="board-settings" onclick="A.go('boardsettings')" title="Board settings" aria-label="Board settings">⋯</button></div></div>
+  <div class="simbar"><span><b>Simulation</b> · Day ${sp.day} of ${sp.length}</span><button class="btn primary sm" data-tour="next-day" onclick="A.nextDay()" ${sp.day>=sp.length?'disabled':''}>Next day</button><span class="muted">Runs one working day: the team moves cards and holds the Daily Scrum.</span></div>
+  ${sp.day>=sp.length?`<div class="banner warn"><b>0 days remaining.</b> Complete the sprint, then hold the review and retrospective.<button class="btn primary sm" data-tour="complete" onclick="A.askComplete()">Complete sprint</button></div>`:''}
+  ${hidden?`<div class="banner warn">${hidden} issue${hidden>1?'s are':' is'} in a status that isn't mapped to a column, so ${hidden>1?'they don\'t':'it doesn\'t'} show on the board. Map ${hidden>1?'them':'it'} in Board settings → Columns.</div>`:''}
+  <div class="qf"><span class="muted" style="font-size:13px">Quick filters:</span>${S.qfs.slice().sort((x,y)=>(!!x.builtin)-(!!y.builtin)).map(q=>`<button class="${UI.qf===q.id?'on':''}" title="${esc(q.jql)}" onclick="A.qf('${q.id}')">${esc(q.name)}</button>`).join('')}${UI.qf?`<button class="clear" onclick="A.qf(null)">Clear all</button>`:''}</div>
+  <div class="board" style="grid-template-columns:repeat(${S.columns.length||1},minmax(${S.columns.length>4?190:240}px,1fr))">${S.columns.map(col).join('')||'<div class="empty">This board has no columns. Add them in Board settings → Columns.</div>'}</div>
+  <div class="sprint-bar">
+    <div class="card"><div class="row-flex" style="justify-content:space-between"><h3>Burndown</h3><span class="muted num">${rem} pts left</span></div>${burnChart(sp,340,200)}<div class="legend"><span><i style="background:var(--accent)"></i>Remaining</span><span><i style="background:var(--muted)"></i>Ideal</span>${(sp.scopeAdded||0)>0?`<span><i style="background:var(--warn)"></i>Scope added</span>`:''}</div>
+      <p class="muted" style="font-size:13px;margin:10px 0 0">The line drops only when issues reach Done. Work in Development, QA or UAT doesn't count yet.</p></div>
+    <div class="card"><h3>Daily stand-up${su?` · morning of day ${su.day}`:''}</h3>${su?`<div class="su-line h"><span>Team member</span><span>Yesterday</span><span>Today</span><span>Blockers</span></div>${su.lines.map(l=>`<div class="su-line"><b>${esc(l.who)}</b><span>${esc(l.y)}</span><span>${esc(l.t)}</span><span style="${l.b!=='None'?'color:var(--bad);font-weight:600':''}">${esc(l.b)}</span></div>`).join('')}`:'<p class="muted" style="margin:6px 0 0">Press Next day to hold the first stand-up: 3 to 5 minutes per person, any blockers?</p>'}</div>
+  </div>`}
+function bcard(i){const need=i.points||i.size||3;const pr=Math.min(100,Math.round(100*(i.progress||0)/need));
+  return `<div class="bcard ${i.blocked?'blocked':''}" draggable="true" ondragstart="A.dragStart(event,'${i.id}')" onclick="A.open('${i.id}')"><span class="t">${esc(i.summary)}</span>${i.blocked?`<span class="flag">${esc(i.blocked)}</span>`:''}${i.fix?`<span class="muted" style="font-size:12px">${esc(i.fix)}</span>`:''}${epicTag(i.epic)?`<span>${epicTag(i.epic)}</span>`:''}${WORKING.includes(i.status)?`<div class="prog" title="${pr}% done"><i style="width:${pr}%"></i></div>`:''}<div class="meta">${ti(i.type)}<span class="key">${i.key}${i.mid?' · added mid-sprint':''}</span>${prio(i.prio)}${ptsChip(i)}${av(member(i.assignee))}</div></div>`}
+
+function reportsView(){const all=S.sprints.filter(s=>s.state!=='future');
+  if(!all.length)return `<div class="head"><div><h1>Reports</h1></div></div><div class="empty"><h2>No sprint data yet</h2><p>Start a sprint to see its burndown. Complete it to see the sprint report and velocity.</p></div>`;
+  let sp=sprintOf(S.reportSprint);if(!sp||sp.state==='future')sp=all[all.length-1];
+  const items=S.issues.filter(i=>i.sprint===sp.id);
+  const done=sp.state==='closed'?(sp.doneKeys||[]):items.filter(i=>i.status==='done').map(i=>i.key);
+  const openK=sp.state==='closed'?(sp.openKeys||[]):items.filter(i=>i.status!=='done').map(i=>i.key);
+  const find=k=>S.issues.find(i=>i.key===k);
+  const closed=closedSprints();
+  return `<div class="head"><div><h1>Reports</h1><p>What happened in each sprint. These charts are what you show at the sprint review and discuss at the retrospective.</p></div>
+    <label class="f" style="min-width:220px">Sprint<select onchange="A.reportSprint(this.value)">${all.map(s=>`<option value="${s.id}" ${s.id===sp.id?'selected':''}>${esc(s.name)} (${s.state==='active'?'active':'completed'})</option>`).join('')}</select></label></div>
+  <div class="stats">
+    <div class="stat"><b>${sp.committed}</b><span>points committed at start</span></div>
+    <div class="stat"><b>${sp.scopeAdded||0}</b><span>points added mid-sprint</span></div>
+    <div class="stat"><b>${sp.state==='closed'?sp.completed:sum(items.filter(i=>i.status==='done'))}</b><span>points completed</span></div>
+    <div class="stat"><b>${openK.length}</b><span>issues not completed</span></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Burndown · ${esc(sp.name)}</h2><p class="muted" style="font-size:14px">Goal: ${esc(sp.goal)}</p>${burnChart(sp,520,250)}<div class="legend"><span><i style="background:var(--accent)"></i>Remaining points</span><span><i style="background:var(--muted)"></i>Ideal pace</span>${(sp.scopeAdded||0)>0?`<span><i style="background:var(--warn)"></i>Scope added</span>`:''}</div></div>
+    <div class="card"><h2>Velocity</h2><p class="muted" style="font-size:14px">Points committed vs completed per sprint. The average is the forecast for planning.</p>${closed.length?velChart(closed):'<p class="muted">Complete a sprint to see velocity.</p>'}</div>
+    <div class="card" style="grid-column:1/-1"><h2>Sprint report</h2>
+      <table><thead><tr><th>Key</th><th>Summary</th><th>Points</th><th>Result</th></tr></thead><tbody>
+      ${done.map(k=>{const i=find(k);return i?`<tr><td>${k}</td><td>${esc(i.summary)}${i.mid?' <span class="loz">added mid-sprint</span>':''}</td><td class="num">${pts(i)}</td><td><span class="loz done">Completed</span></td></tr>`:''}).join('')}
+      ${openK.map(k=>{const i=find(k);return i?`<tr><td>${k}</td><td>${esc(i.summary)}</td><td class="num">${pts(i)}</td><td><span class="loz">${sp.state==='closed'?'Not completed, moved':statusLabel(i.status)}</span></td></tr>`:''}).join('')}
+      </tbody></table></div>
+  </div>
+  ${sp.state==='closed'?`<div class="row-flex" style="margin-top:16px"><button class="btn primary" onclick="A.retroSprint('${sp.id}');A.go('retro')">Go to the retrospective</button></div>`:''}`}
+function velChart(list){const W=520,H=250,pad={l:34,r:12,t:12,b:30};const iw=W-pad.l-pad.r,ih=H-pad.t-pad.b;const max=Math.max(1,...list.map(s=>Math.max(s.committed+(s.scopeAdded||0),s.completed)));const step=max>40?10:(max>16?5:2);const top=Math.ceil(max/step)*step;const y=v=>pad.t+ih*(1-v/top);const gw=iw/Math.max(list.length,3);const bw=Math.min(34,gw/3);
+  let g='';for(let v=0;v<=top;v+=step)g+=`<line class="grid" x1="${pad.l}" x2="${W-pad.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${pad.l-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  list.forEach((s,k)=>{const cx=pad.l+gw*k+gw/2;const c=s.committed;g+=`<rect class="b-commit" x="${cx-bw-2}" y="${y(c)}" width="${bw}" height="${y(0)-y(c)}" rx="2"/><rect class="b-done" x="${cx+2}" y="${y(s.completed)}" width="${bw}" height="${y(0)-y(s.completed)}" rx="2"/><text x="${cx-bw/2-2}" y="${y(c)-4}" text-anchor="middle">${c}</text><text x="${cx+bw/2+2}" y="${y(s.completed)-4}" text-anchor="middle">${s.completed}</text><text x="${cx}" y="${H-10}" text-anchor="middle">${esc(s.name.replace(S.project.key+' ',''))}</text>`});
+  const avg=forecast().val;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Velocity chart">${g}</svg><div class="legend"><span><i style="background:var(--line);height:10px"></i>Committed</span><span><i style="background:var(--good);height:10px"></i>Completed</span><span>Forecast for next sprint: <b class="num">${avg} pts</b></span></div>`}
+
+function retroView(){const closed=closedSprints();
+  if(!closed.length)return `<div class="head"><div><h1>Retrospective</h1></div></div><div class="empty"><h2>Complete a sprint first</h2><p>The retrospective happens at the end of each sprint, after the sprint review.</p></div>`;
+  let sid=S.retroSprint;if(!closed.some(s=>s.id===sid))sid=closed[closed.length-1].id;S.retroSprint=sid;const sp=sprintOf(sid);
+  const notes=c=>S.retro.filter(n=>n.sprint===sid&&n.col===c).sort((a,b)=>b.votes-a.votes);
+  const col=(c,title,sub,ph)=>`<div class="rcol ${c}"><h3><i></i>${title}</h3><div class="sub">${sub}</div>${notes(c).map(n=>`<div class="note"><span>${esc(n.text)}</span><div class="acts"><button class="vote" onclick="A.voteRetro('${n.id}')" aria-label="Vote">+${n.votes}</button>${c==='action'?(n.task?`<span class="loz done">${n.task} in backlog</span>`:`<button class="btn sm" data-tour="retro-task" onclick="A.retroTask('${n.id}')">Create backlog task</button>`):''}<span style="flex:1"></span><button class="btn ghost sm" onclick="A.delRetro('${n.id}')" aria-label="Delete note">✕</button></div></div>`).join('')}<div class="row-flex" style="flex-wrap:nowrap"><input id="rt-${c}" placeholder="${ph}" onkeydown="if(event.key==='Enter')A.addRetro('${c}')" aria-label="${title}"><button class="btn sm" onclick="A.addRetro('${c}')">Add</button></div></div>`;
+  return `<div class="head"><div><h1>Retrospective · ${esc(sp.name)}</h1><p>${sp.completed} of ${sp.committed+(sp.scopeAdded||0)} points completed. Talk about how the team worked, then agree on what to change.</p></div>
+    ${closed.length>1?`<label class="f" style="min-width:200px">Sprint<select onchange="A.retroSprint(this.value)">${closed.map(s=>`<option value="${s.id}" ${s.id===sid?'selected':''}>${esc(s.name)}</option>`).join('')}</select></label>`:''}</div>
+  <div class="retro">
+    ${col('well','Went well','Keep doing these.','e.g. Stand-ups stayed short')}
+    ${col('improve','To improve','What slowed us down?','e.g. The 20-point story didn\'t fit')}
+    ${col('action','Action items','One or two concrete changes for next sprint.','e.g. Split stories over 8 points')}
+  </div>
+  <div class="row-flex" style="margin-top:16px"><button class="btn primary" onclick="A.stage(STAGES.length-1)">Plan the next sprint</button></div>`}
+
+A.issf=f=>{UI.issf=f;render()};
+function issuesView(){const f=UI.issf||'open';const sel={open:i=>i.status!=='done',done:i=>i.status==='done',all:()=>true,mine:i=>{const me=S.site&&S.team.find(t=>t.name===S.site.first+' '+S.site.last);return me&&i.assignee===me.id}}[f];
+  const list=S.issues.filter(sel).sort(byRank);
+  return `<div class="head"><div><h1>Issues and filters</h1><p>Everything in Jira is an issue: epics, stories, tasks and bugs. Filters find issues across the whole project, whatever sprint they're in.</p></div></div>
+  <div class="qf">${[['open','Open issues'],['done','Done issues'],['all','All issues'],['mine','My open issues']].map(([k,l])=>`<button class="${f===k?'on':''}" onclick="A.issf('${k}')">${l}</button>`).join('')}<span class="muted" style="font-size:13px">${list.length} issues</span></div>
+  <div class="card" style="overflow-x:auto"><table><thead><tr><th>Key</th><th>Type</th><th>Summary</th><th>Status</th><th>Assignee</th><th>Epic</th><th>Fix version</th><th>Sprint</th><th>Points</th></tr></thead><tbody>
+  ${list.map(i=>{const m=member(i.assignee),sp=sprintOf(i.sprint);return `<tr style="cursor:pointer" onclick="A.open('${i.id}')"><td class="num">${i.key}</td><td>${ti(i.type)}</td><td>${esc(i.summary)}</td><td><span class="loz ${stCls(i.status)}">${statusLabel(i.status)}</span></td><td>${m?esc(m.name):'<span class="muted">Unassigned</span>'}</td><td>${epicTag(i.epic)}</td><td>${esc(i.fix||'')}</td><td>${sp?esc(sp.name):'<span class="muted">Backlog</span>'}</td><td class="num">${i.type==='task'?'':(i.points||'')}</td></tr>`}).join('')||'<tr><td colspan="9" class="muted">No issues match this filter.</td></tr>'}
+  </tbody></table></div>`}
+function modal(i){const sp=i.sprint?sprintOf(i.sprint):null;const locked=sp&&sp.state==='closed';const open=S.sprints.filter(s=>s.state!=='closed');const p=UI.poker&&UI.poker.id===i.id?UI.poker:null;
+  let poker='';if(p){const vs=p.votes.map(x=>x.v);const lo=Math.min(...vs),hi=Math.max(...vs);const spread=FIB.indexOf(hi)-FIB.indexOf(lo);const lw=p.votes.find(x=>x.v===lo).who,hw=p.votes.find(x=>x.v===hi).who;
+    const counts={};vs.forEach(v=>counts[v]=(counts[v]||0)+1);const mode=+Object.keys(counts).sort((a,b)=>counts[b]-counts[a]||b-a)[0];
+    poker=`<div class="poker"><b>Planning poker · round ${p.round}</b><div class="pcards">${p.votes.map(x=>`<div><div class="pcard ${p.revealed?'':'down'}">${p.revealed?x.v:''}</div><div class="pwho">${esc(x.who.split(' ')[0])}</div></div>`).join('')}</div>
+    ${!p.revealed?`<span class="muted" style="font-size:13px">Everyone has picked a card face-down, so nobody anchors on someone else's number.</span><div><button class="btn primary sm" data-tour="poker-act" onclick="A.reveal()">Reveal cards</button></div>`:(spread>=2?`<div class="note-warn">Big spread: ${lo} to ${hi}. ${esc(lw.split(' ')[0])} (lowest) and ${esc(hw.split(' ')[0])} (highest) explain their thinking, then everyone votes again.</div><div class="row-flex"><button class="btn primary sm" data-tour="poker-act" onclick="A.revote()">Discuss and vote again</button></div>`:`<span style="font-size:14px">Close enough. The team agrees on a value:</span><div class="fibrow">${FIB.map(v=>`<button class="fib ${v===mode?'on':''}" ${v===mode?'data-tour="poker-act"':''} onclick="A.agree(${v})">${v}</button>`).join('')}</div>`)}</div>`}
+  const opt=(list,cur,lab)=>list.map(([v,l])=>`<option value="${v}" ${v===(cur||'')?'selected':''}>${esc(l)}</option>`).join('');
+  return `<div class="overlay" onclick="if(event.target===this)A.close()"><div class="modal" role="dialog" aria-modal="true" aria-label="${i.key}">
+    <div class="m-h">${ti(i.type)}<select aria-label="Issue type" style="width:auto" onchange="A.set('${i.id}','type',this.value)" ${locked?'disabled':''}>${['story','task','bug'].map(t=>`<option value="${t}" ${t===i.type?'selected':''}>${TYPE_LABEL[t]}</option>`).join('')}</select><b>${i.key}</b>${locked?'<span class="loz closed">In a closed sprint</span>':''}<span style="flex:1"></span>${!locked?`<button class="btn ghost sm danger" onclick="A.delIssue('${i.id}')">Delete</button>`:''}<button class="btn ghost" onclick="A.close()" aria-label="Close">✕</button></div>
+    <div class="m-b"><div class="stack">
+      <input class="sumin" id="md-sum" value="${esc(i.summary)}" onchange="A.set('${i.id}','summary',this.value)" aria-label="Summary">
+      ${i.type==='story'&&!STORY_RX.test(i.summary+' '+i.desc+' ')?`<div class="note-warn">Stories read best as "As a [role], I want [goal] so that [why]". <button class="btn sm" onclick="A.storyTpl('${i.id}')">Use the template</button></div>`:''}
+      ${i.blocked?`<div class="blockbox"><b>Blocked: ${esc(i.blocked)}</b><span>Developers can't move this forward. The Scrum Master works to remove the impediment.</span><div><button class="btn sm" data-tour="unblock" onclick="A.unblock('${i.id}')">Remove blocker (Scrum Master)</button></div></div>`:''}
+      <label class="f" for="md-desc">Description<textarea id="md-desc" onchange="A.set('${i.id}','desc',this.value)" placeholder="Context, links, designs…">${esc(i.desc)}</textarea></label>
+      <div><div class="f" style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px">Acceptance criteria <span style="font-weight:400">· testable conditions that must be true for this to be done</span></div>
+        ${i.ac.map((a,k)=>`<div class="list-item"><span>✓ ${esc(a)}</span><button class="btn ghost sm" onclick="A.delAC('${i.id}',${k})" aria-label="Remove">✕</button></div>`).join('')}
+        <div class="row-flex" style="flex-wrap:nowrap;margin-top:6px"><input id="ac-new" placeholder="Given … when … then …" onkeydown="if(event.key==='Enter')A.addAC('${i.id}')" aria-label="New acceptance criterion"><button class="btn sm" onclick="A.addAC('${i.id}')">Add</button></div></div>
+      <label class="f" for="md-dod">Definition of Done <span class="hint">When is this story complete?</span><textarea id="md-dod" style="min-height:54px" onchange="A.set('${i.id}','dod',this.value)" placeholder="The story is complete when…">${esc(i.dod)}</textarea></label>
+      <div><div class="f" style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px">Sub-tasks <span style="font-weight:400">· ${i.subtasks.filter(s=>s.done).length} of ${i.subtasks.length} done</span></div>
+        ${i.subtasks.map((s,k)=>`<div class="list-item"><input type="checkbox" ${s.done?'checked':''} onchange="A.togSub('${i.id}',${k})" aria-label="Done"><span style="${s.done?'text-decoration:line-through;color:var(--muted)':''}">${esc(s.t)}</span><button class="btn ghost sm" onclick="A.delSub('${i.id}',${k})" aria-label="Remove">✕</button></div>`).join('')}
+        <div class="row-flex" style="flex-wrap:nowrap;margin-top:6px"><input id="st-new" placeholder="e.g. Write copy for the audio screen" onkeydown="if(event.key==='Enter')A.addSub('${i.id}')" aria-label="New sub-task"><button class="btn sm" onclick="A.addSub('${i.id}')">Add</button></div></div>
+    </div>
+    <div class="fields">
+      <label class="f">Status<select onchange="A.set('${i.id}','status',this.value)" ${locked?'disabled':''}>${opt(ST,i.status)}</select></label>
+      <label class="f">Assignee<select data-tour="assignee-select" onchange="A.set('${i.id}','assignee',this.value)">${opt([['','Unassigned'],...S.team.filter(m=>m.role!=='Stakeholder').map(m=>[m.id,m.name+(m.title?' · '+m.title:'')])],i.assignee)}</select></label>
+      <label class="f">Sprint<select data-tour="sprint-select" onchange="A.set('${i.id}','sprint',this.value)" ${locked?'disabled':''}>${locked?`<option>${esc(sp.name)}</option>`:opt([['','Backlog'],...open.map(s=>[s.id,s.name+(s.state==='active'?' (active)':'')])],i.sprint)}</select></label>
+      <label class="f">Epic<select data-tour="epic-select" onchange="A.set('${i.id}','epic',this.value)">${opt([['','None'],...S.epics.map(e=>[e.id,e.name])],i.epic)}</select></label>
+      <label class="f">Labels <span class="hint">comma-separated, for grouping and filtering</span><input value="${esc(i.labels||'')}" placeholder="e.g. Audio System" onchange="A.set('${i.id}','labels',this.value)"></label>
+      <label class="f">Fix version<select data-tour="fix-select" onchange="A.set('${i.id}','fix',this.value)">${opt([['','None'],...S.releases.map(r=>[r.name,r.name])],i.fix)}</select></label>
+      <label class="f">Priority<select onchange="A.set('${i.id}','prio',this.value)">${opt(PRIOS.map(x=>[x,x]),i.prio)}</select></label>
+      ${i.type==='task'?`<div class="f"><span>Story points</span><span class="muted" style="font-weight:400">Tasks don't get story points: a task is ongoing work with an end, not a piece of user value (JiraTutorial3).</span></div>`:`<div class="f"><span>Story points</span><div class="fibrow" data-tour="points" style="flex-wrap:wrap">${FIB.map(v=>`<button class="fib ${i.points===v?'on':''}" onclick="A.setPts('${i.id}',${v})" ${locked?'disabled':''}>${v}</button>`).join('')}</div>
+        ${!locked&&!p?`<div><button class="btn sm" data-tour="poker" style="margin-top:6px" onclick="A.poker('${i.id}')">Estimate with planning poker</button></div>`:''}</div>`}
+      ${poker}
+      ${!i.blocked&&!locked?`<button class="btn ghost sm" style="justify-self:start" onclick="A.flag('${i.id}')">Flag as blocked</button>`:''}
+    </div></div>
+  </div></div>`}
+function dlgHTML(){const d=UI.dlg;return `<div class="overlay" style="z-index:30"><div class="dialog" role="alertdialog" aria-modal="true" aria-label="${esc(d.title)}"><h2>${esc(d.title)}</h2><div class="stack" style="gap:10px">${d.body}</div><div class="acts">${d.actions.map(a=>`<button class="btn ${a.kind}" onclick="A.dlgAct(${a.k})">${esc(a.label)}</button>`).join('')}</div></div></div>`}
+
+/* ---------- hint bubbles ---------- */
+const CLIPS=['.board','.main','.lesson','.epic-scroll','.overlay'];
+function shown(e){const r=e.getBoundingClientRect();if(r.width<=0||r.height<=0)return null;if(r.bottom<0||r.right<0||r.top>innerHeight||r.left>innerWidth)return null;for(const c of CLIPS){const p=e.closest(c);if(p&&p!==e){const q=p.getBoundingClientRect();if(r.bottom<q.top+4||r.top>q.bottom-4||r.right<q.left+4||r.left>q.right-4)return null}}return r}
+let tourRaf=0;
+function tour(){cancelAnimationFrame(tourRaf);tourRaf=requestAnimationFrame(drawTour)}
+function drawTour(){const layer=document.getElementById('tour');document.querySelectorAll('.tour-hl').forEach(e=>e.classList.remove('tour-hl'));if(S.hints===false){layer.innerHTML='';return}
+  const st=STAGES[S.stage];const cs=st.checks();const overlay=document.querySelector('.overlay');const out=[];
+  let list=cs.map((c,k)=>({k,done:c[1],label:c[0],sels:c[2]||[]}));
+  if(!cs.length||cs.every(c=>c[1]))list=[{k:-1,done:false,label:cs.length?'All tasks done. Go to the next step.':'Press Start to begin the lesson.',sels:['[data-tour=next-stage]']}];
+  for(const t of list){if(t.done)continue;for(const sel of t.sels){let el=null,r=null;for(const e of document.querySelectorAll(sel)){if(overlay&&!overlay.contains(e))continue;const rr=shown(e);if(rr){el=e;r=rr;break}}if(el){if(!out.some(o=>o.el===el))out.push({...t,el,r});else{const o=out.find(o=>o.el===el);o.extra=(o.extra||[]).concat(t.k)}break}}}
+  let h='';out.forEach((t,n)=>{const r=t.r;const x=Math.min(innerWidth-26,Math.max(2,r.right-10)),y=Math.min(innerHeight-26,Math.max(2,r.top-12));const num=t.k<0?'→':[t.k,...(t.extra||[])].map(v=>v+1).join(',');
+    h+=`<div class="tdot ${n===0?'first':''}" style="left:${x}px;top:${y}px">${num}</div>`;
+    if(n===0){t.el.classList.add('tour-hl');const w=250,hgt=64;let cx,cy,up=false;if(r.height>160&&r.right+w+16<innerWidth){cx=r.right+12;cy=Math.max(10,r.top+10)}else if(r.top-hgt-14>60){cx=Math.min(innerWidth-w-10,Math.max(10,r.left));cy=r.top-hgt-14;up=true}else{cx=Math.min(innerWidth-w-10,Math.max(10,r.left));cy=Math.min(innerHeight-hgt-10,r.bottom+12)}h+=`<div class="tcall ${up?'up':''}" style="left:${cx}px;top:${cy}px;width:${w}px"><b>${t.k<0?'Next':'Task '+(t.k+1)}</b>${esc(t.label)}</div>`}});
+  layer.innerHTML=h}
+addEventListener('resize',tour);document.addEventListener('scroll',tour,true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(UI.dlg){UI.dlg=null;render()}else if(UI.create){A.ciClose()}else if(UI.modal)A.close()}});
+document.addEventListener('dragend',()=>{document.querySelectorAll('.drag-over,.dropping').forEach(el=>el.classList.remove('drag-over','dropping'))});
+render();
+</script>
+</body>
+</html>
